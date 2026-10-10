@@ -1,0 +1,225 @@
+## 当前问题
+
+之前：
+
+```
+pytest
+ ↓
+testcase
+ ↓
+Runner.run(ApiCase)
+        |
+        ↓
+    for case in cases:
+        execute()
+```
+
+问题：
+
+**Runner越权。**
+
+它接管了 pytest 的职责：
+
+- case循环
+- 测试调度
+- 生命周期管理
+
+导致：
+
+- pytest只看到一个测试
+- 报告粒度丢失
+- fixture生态无法发挥
+
+------
+
+## 修正原则
+
+回归：
+
+> pytest负责管理测试，框架负责提供执行能力。
+
+职责重新划分：
+
+```
+pytest
+ |
+ | 参数化多个case
+ ↓
+testcase
+
+ |
+ ↓
+
+CaseRunner.run(case)
+
+ |
+ ↓
+
+HttpClient
+```
+
+------
+
+## 下一步框架规划
+
+核心只保留两个对pytest的接口：
+
+### 1. 数据适配接口
+
+职责：
+
+不同数据源 → 统一测试模型
+
+例如：
+
+```
+yaml
+json
+db
+平台
+
+ ↓
+
+ExecuteCase
+```
+
+提供：
+
+```
+get_cases()
+```
+
+给pytest参数化。
+
+------
+
+### 2. Runner执行接口
+
+职责：
+
+执行单个测试case。
+
+输入：
+
+```
+ExecuteCase
+```
+
+流程：
+
+```
+准备请求
+ ↓
+发送请求
+ ↓
+提取数据
+ ↓
+执行校验
+```
+
+不负责：
+
+- case循环
+- 测试发现
+- 生命周期
+
+------
+
+## 下一步开发顺序
+
+1. **重新定义执行模型**
+
+例如：
+
+```
+ExecuteCase
+```
+
+作为：
+
+```
+数据适配层
+        |
+        ↓
+     pytest
+        |
+        ↓
+     Runner
+```
+
+之间的契约。
+
+------
+
+1. **修改数据适配**
+
+现在：
+
+```
+yaml
+ ↓
+ApiCase
+```
+
+改成：
+
+```
+yaml
+ ↓
+ExecuteCase列表
+```
+
+每个元素对应 pytest 一个测试节点。
+
+------
+
+1. **修改pytest入口**
+
+变成：
+
+```
+@pytest.mark.parametrize(    "case",    provider.get_cases())def test_api(case):    runner.run(case)
+```
+
+------
+
+1. **瘦身Runner**
+
+Runner只保留：
+
+```
+run(case)
+```
+
+不再：
+
+```
+for case in cases
+```
+
+------
+
+最终模型：
+
+```
+                数据源
+                  |
+                  ↓
+          Case Provider
+                  |
+                  ↓
+          ExecuteCase[]
+                  |
+                  ↓
+              pytest
+                  |
+                  ↓
+            CaseRunner
+                  |
+                  ↓
+             HttpClient
+```
+
+一句话：
+
+**把“多case调度权”还给pytest，把“单case执行能力”留给Runner。**

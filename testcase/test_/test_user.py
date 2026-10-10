@@ -2,7 +2,7 @@
 
 import pytest
 import requests
-from common.utils.yaml_to_params import to_user_add_params
+from utils.yaml_to_params import to_user_add_params
 
 class TestUser:
 

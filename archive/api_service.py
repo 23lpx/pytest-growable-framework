@@ -1,7 +1,7 @@
 # utils/api_service.py
 import logging
-from common.utils.http_client import HttpClient
-from common.utils.read_yaml import read_case
+from utils.http_client import HttpClient
+from utils.read_yaml import read_case
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)

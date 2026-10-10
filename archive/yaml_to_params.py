@@ -1,6 +1,6 @@
 import pytest
 
-from common.utils.read_yaml import read_case
+from utils.read_yaml import read_case
 
 def to_login_params(file_path : str = 'login_cases.yaml') -> list:
     cases = read_case(file_path)['test_cases']
