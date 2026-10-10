@@ -89,6 +89,8 @@ runner/CaseRunner.run(case)                  编排，只三行
 
 **关键边界**：`HttpClient` 是通用底座，只认纯值（method/path/headers/data），**不许 import 模型**；谁要 `CaseModel`，谁就在 `adapter` / `runner` / `handler` 里。
 
+**资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`CaseRunner` / `RequestHandler` **只收不 new**，不持有生命周期。改动时别把 `new HttpClient` 塞回框架内部。
+
 ## 代码规范（硬约束，详见 `docs/代码规范.md`）
 
 - **魔法值**：不裸写字符串常量，统一放 `framework/constants/`（如 `ValidationOp.CONTAINS`，不写 `'contains'`）。

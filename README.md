@@ -105,7 +105,7 @@ runner/CaseRunner.run(case)   编排，只三行
 | `config/` | 配置（空，待做） |
 | `logs/` | 日志（按天切） |
 | `reports/` | 测试报告（allure，空） |
-| `conftest.py` | `base_url` fixture + `init_logger()` |
+| `conftest.py` | `base_url` / `client` fixture + `init_logger()` |
 | `pytest.ini` | pytest 配置 |
 
 ---

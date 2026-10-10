@@ -23,3 +23,5 @@ class ValidationHandler:
                 if key == ValidationOp.CONTAINS:
                     if not value.items() <= resp_data.items():
                         raise ValidationError(f"期望响应包含 {value}，实际 {resp_data}")
+                else:
+                    raise ValidationError(f"未知校验操作符: {key}")

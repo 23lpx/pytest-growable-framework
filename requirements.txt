@@ -1,5 +1,8 @@
-
 requests
-pytest
 pyyaml
+jsonpath
 logging-tree
+pytest
+pytest-ordering
+pytest-rerunfailures
+pytest-xdist

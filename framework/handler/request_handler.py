@@ -9,12 +9,14 @@ class RequestHandler:
 
     只干「发」这一件事 —— 它不认识 yaml、不做断言。
 
-    注意别和 client 层的 HttpClient 混了：那个是「HTTP 底座」（管 session/timeout），
-    这个只是用例执行里「发请求」的那一步。
+    HttpClient 由外面注入（不自己 new），所以它的生命周期不归这里管 ——
+    谁创建谁销毁，交给 fixture。
+
+    注意别和 client 层的 HttpClient 混了：那个是「HTTP 底座」，这个只是执行流程里发请求的那一步。
     """
 
-    def __init__(self, base_url: str) -> None:
-        self.client = HttpClient(base_url)
+    def __init__(self, client: HttpClient) -> None:
+        self.client = client
 
     def send(self, case: CaseLike) -> Response:
         return self.client._request(
@@ -23,6 +25,3 @@ class RequestHandler:
             headers=case.headers,
             data=case.data,
         )
-
-    def close(self) -> None:
-        self.client.close()

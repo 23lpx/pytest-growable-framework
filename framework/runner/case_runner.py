@@ -1,5 +1,6 @@
 import logging
 
+from framework.client.http_client import HttpClient
 from framework.contracts import CaseLike
 from framework.exception.base import FrameworkError
 from framework.handler.request_handler import RequestHandler
@@ -14,12 +15,14 @@ class CaseRunner:
     三步：发送请求 -> 校验（提取待 Context 设计好后接进来）。
     不做 case 循环、不做测试发现、不管生命周期 —— 那些是 pytest 的活。
 
+    HttpClient 由外面注入，Runner 不持有它的生命周期（不 new、不 close）。
+
     异常：不吞。捕获到框架异常就补上 case_name 上下文、记日志，然后原样往上抛，
     由 pytest 决定测试失败。
     """
 
-    def __init__(self, base_url: str) -> None:
-        self.request_handler = RequestHandler(base_url)
+    def __init__(self, client: HttpClient) -> None:
+        self.request_handler = RequestHandler(client)
         self.validation_handler = ValidationHandler()
 
     def run(self, case: CaseLike) -> None:

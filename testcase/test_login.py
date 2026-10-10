@@ -11,5 +11,5 @@ class TestLogin:
         "case",
         [c.to_pytest_param() for c in ExecuteCase.from_model(CaseModel('/data/login_cases.yaml'))],
     )
-    def test_login(self, case, base_url):
-        CaseRunner(base_url).run(case)
+    def test_login(self, case, client):
+        CaseRunner(client).run(case)
