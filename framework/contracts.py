@@ -8,7 +8,8 @@ class CaseLike(Protocol):
     只要结构对得上就行，不用显式继承。
     传错对象会在类型检查阶段暴露，而不是跑到一半才发现属性不存在。
 
-    ⚠️ 字段必须和 adapter/execute_case.py 的 ExecuteCase 保持一致（两处同步改）。
+    ⚠️ 字段必须和 adapter/execute_case.py 的 ExecuteCase、context/replacer.py 的
+    ResolvedCase 保持一致（**三处同步改**）。
     """
 
     api_name: str
@@ -18,3 +19,4 @@ class CaseLike(Protocol):
     case_name: str
     data: dict
     validations: list
+    extracts: dict

@@ -6,30 +6,29 @@ base_info:
     'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
 
 test_cases:
-  - case_name: 正常token
+  - case_name: 正常新增用户
     data:
-      user_name: new01
-    token_type: valid
+      # 用函数生成唯一用户名，避免重复跑时撞上历史脏数据
+      username: "user_${timestamp()}"
+      password: "pwd123456"
+      role_id: 123456789
+      dates: '2023-12-31'
+      phone: 13800000000
+      token: "${token}"          # 从变量池取 —— 由前置登录 fixture 写入
     validation:
       - contains:
           msg: 新增成功
       - contains:
           msg_code: 200
 
-  - case_name: 错误token
+  - case_name: 无效token
     data:
-      user_name: new01
-    token_type: invalid
-    validation:
-      - contains:
-          msg: 新增失败，参数缺失或token失效
-      - contains:
-          msg_code: 9001
-
-  - case_name: 过期token
-    data:
-      user_name: new01
-    token_type: expired
+      username: "user_${timestamp()}"
+      password: "pwd123456"
+      role_id: 123456789
+      dates: '2023-12-31'
+      phone: 13800000000
+      token: "wrong-token-9f3a"
     validation:
       - contains:
           msg: 新增失败，参数缺失或token失效
@@ -38,8 +37,11 @@ test_cases:
 
   - case_name: 缺失token
     data:
-      user_name: new01
-    token_type: missing
+      username: "user_${timestamp()}"
+      password: "pwd123456"
+      role_id: 123456789
+      dates: '2023-12-31'
+      phone: 13800000000
     validation:
       - contains:
           msg: 新增失败，参数缺失或token失效

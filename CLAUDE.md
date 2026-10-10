@@ -17,7 +17,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Python 3.12，venv 在 `.venv/`。**必须用 `.venv` 里的解释器跑，禁止裸敲 `pip` / `activate`**（venv 搬过家，绝对路径写死在 `activate` / `pip.exe` 里）：
 
 ```bash
-./.venv/Scripts/python.exe -m pytest                                  # 全跑
+./.venv/Scripts/python.exe -m pytest                                  # 跑接口用例（testpaths=testcase）
+./.venv/Scripts/python.exe -m pytest tests/                           # 跑框架自身的单测（不依赖被测服务）
 ./.venv/Scripts/python.exe -m pytest --collect-only -q                # 只收集不执行（用例数不对时第一件事）
 ./.venv/Scripts/python.exe -m pytest -k login                          # 按名字筛
 ./.venv/Scripts/python.exe -m pytest -m smoke                          # 按标记筛
@@ -66,9 +67,11 @@ adapter/ExecuteCase.from_model               适配：模型 → 执行器契约
 pytest 参数化                                 ← 多 case 调度权在 pytest 手里
    │  一次一条 case
    ▼
-runner/CaseRunner.run(case)                  编排，只三行
+runner/CaseRunner.run(case)                  编排，四步
+   ├── context/replacer.resolve_case    解析 ${...} → 产出**副本**（绝不改原 case）
    ├── handler/RequestHandler  → client/HttpClient → 被测接口
-   └── handler/ValidationHandler
+   ├── handler/ValidationHandler        校验（fail-fast：不过就不写变量池）
+   └── handler/ExtractHandler           提取 → context/Context（供后续用例引用）
 ```
 
 | 目录 / 文件 | 职责 |
@@ -76,20 +79,28 @@ runner/CaseRunner.run(case)                  编排，只三行
 | `framework/reader/read_yaml.py` | 读文件 → dict。抛 `YamlReadError` |
 | `framework/model/case_model.py` | 封装。`ApiCase` / `TestCase` / `CaseModel`。抛 `CaseParseError` |
 | `framework/adapter/execute_case.py` | 适配。`ExecuteCase` 带接口级+用例级信息，`from_model()` / `to_pytest_param()` |
-| `framework/runner/case_runner.py` | 只做编排：发送 → 校验 →（提取待做）。不循环、不管生命周期 |
+| `framework/runner/case_runner.py` | 只做编排：解析占位符 → 发送 → 校验 → 提取。不循环、不管生命周期 |
 | `framework/handler/request_handler.py` | `RequestHandler.send(case)` —— 发请求那一步 |
 | `framework/handler/validation_handler.py` | `ValidationHandler.validate(case, resp)` —— 校验，抛 `ValidationError` |
+| `framework/handler/extract_handler.py` | `ExtractHandler.extract(case, resp, ctx)` —— jsonpath 提取，写进变量池 |
+| `framework/context/context.py` | `Context` —— 内存变量池。`a.b.c` 点号路径，取不到抛 `ContextError` |
+| `framework/context/replacer.py` | `ResolvedCase` + `resolve_case()` —— 解析 `${token}` / `${today()}`，**产副本** |
+| `framework/context/functions.py` | 函数市场：`@register("today")`，加函数不用改框架 |
 | `framework/client/http_client.py` | 通用 HTTP 底座（session / timeout / base_url 拼接 / 日志）。**不认识测试概念** |
 | `framework/exception/` | 异常体系（`base.py` + `errors.py`） |
 | `framework/constants/` | 常量，魔法值收口（一个主题一个模块） |
 | `framework/contracts.py` | 跨层契约 `CaseLike`（Protocol） |
-| `framework/infra/` | 基础设施：`logger.py` / `path.py`（`_project_root()`） |
-| `framework/context/` | 空，待做（动态数据 / 变量传递） |
+| `framework/infra/` | 基础设施：`logger.py`（命名 logger + 脱敏）/ `masking.py` / `path.py` |
+| `tests/` | **框架自身的单测**（不依赖被测服务）。裸跑 pytest 收不到，要 `pytest tests/` |
 | `archive/` | 归档的旧链路参考代码 + 被取代的旧设计文档。**不要 import 它** |
 
 **关键边界**：`HttpClient` 是通用底座，只认纯值（method/path/headers/data），**不许 import 模型**；谁要 `CaseModel`，谁就在 `adapter` / `runner` / `handler` 里。
 
-**资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`CaseRunner` / `RequestHandler` **只收不 new**，不持有生命周期。改动时别把 `new HttpClient` 塞回框架内部。
+**资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`Context`（变量池）由 `context` fixture（**session 级**，跨用例关联必须共享）提供。`CaseRunner` / `RequestHandler` **只收不 new**，不持有生命周期。改动时别把 `new HttpClient` 塞回框架内部。
+
+**占位符替换必须产副本**：`resolve_case()` 返回 `ResolvedCase`，**绝不就地改原 case** —— `ExecuteCase` 是收集阶段构造、整个 session 共用的（含 `--reruns`），就地改会让第二遍跑到第一遍留下的脏数据。
+
+**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集（`test_add_user.py` 排在 `test_login.py` 前），"登录先跑"天然不成立。要前置数据就写 `conftest` 的 `login` fixture。
 
 ## 代码规范（硬约束，详见 `docs/代码规范.md`）
 
@@ -112,8 +123,9 @@ FrameworkError（基类，带 context，上层可 add_context 补充如 case_nam
 │   ├── YamlReadError     Reader：文件不存在 / yaml 格式错 / 编码错
 │   └── CaseParseError    Model：用例结构不符规范 / 字段缺失
 ├── ModelError
+├── ContextError          Context：变量不存在 / 路径中间层类型不对 / 占位符语法
 ├── RequestError          Client：网络 / 超时 / 请求异常
-├── ExtractError          Handler：提取失败（待接线）
+├── ExtractError          Handler：提取失败 / jsonpath 无匹配
 └── ValidationError       Handler：校验失败
 ```
 
@@ -131,3 +143,6 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 - `ModuleNotFoundError` → 先想 `-m` vs 直接跑文件
 - 整个 session 一条都不跑 → 看是不是有别的测试目录被收进来报 `collection error`
 - 改了 `framework/` 后行为不对 → 确认改的是哪一层，别把测试专属逻辑塞进 `client`
+- `${...}` 报 `ContextError` → 变量池里没这个 key（没提取到 / 提取时的 key 名对不上），去文件日志 `logs/app.log` 看提取那几行
+- 数据库/接口断言"看起来过了但没验到" → 注意 `contains` 是**精确等值**匹配（不是子串），yaml 里要写完整消息
+- 跨用例关联在 `-n` 下失效 → 变量池是进程内的，有依赖的用例集别开 `-n`

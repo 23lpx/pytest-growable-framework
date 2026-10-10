@@ -68,9 +68,11 @@ adapter/ExecuteCase      适配：模型 → 执行器契约（一条 = 一个 p
 pytest 参数化             ← 多 case 调度权在 pytest 手里
    │  一次一条 case
    ▼
-runner/CaseRunner.run(case)   编排，只三行
+runner/CaseRunner.run(case)   编排，四步
+   ├── context/replacer.resolve_case   解析 ${...} → 产出副本（不改原 case）
    ├── handler/RequestHandler     → client/HttpClient → 被测接口
-   └── handler/ValidationHandler
+   ├── handler/ValidationHandler  校验（fail-fast：不过就不写变量池）
+   └── handler/ExtractHandler     提取 → context/Context（供后续用例引用）
 ```
 
 | 模块 | 文件 | 职责 | 状态 |
@@ -81,15 +83,21 @@ runner/CaseRunner.run(case)   编排，只三行
 | runner | `framework/runner/case_runner.py` | 编排单条用例 | ✅ |
 | handler | `framework/handler/request_handler.py` | 发送请求 | ✅ |
 | handler | `framework/handler/validation_handler.py` | 校验 | ✅ |
-| handler | 提取（extract） | 动态数据提取 | ⬜ 待做（等 context） |
+| handler | `framework/handler/extract_handler.py` | 提取（jsonpath → 变量池） | ✅ |
 | client | `framework/client/http_client.py` | 通用 HTTP 底座 | ✅ |
+| context | `framework/context/` | 变量池 / 占位符解析 / 函数市场 | ✅ |
 | exception | `framework/exception/` | 异常体系 | ✅ |
 | constants | `framework/constants/` | 常量（魔法值收口） | ✅ |
 | contracts | `framework/contracts.py` | 跨层契约（Protocol） | ✅ |
-| context | `framework/context/` | 动态数据 / 变量传递 | ⬜ 空 |
+| infra | `framework/infra/` | 日志（**含脱敏**）/ 路径 | ✅ |
+| tests | `tests/` | 框架自身的单测（不依赖被测服务） | ✅ |
 | config | `config/` | 配置（base_url / 账号 / 超时） | ⬜ 空（base_url 现硬编码在 conftest） |
 
-**资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`CaseRunner` / `RequestHandler` 只收不 new。整轮测试共用 1 条连接（不是每条用例一条）。
+**资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`Context`（变量池）由 `context` fixture（**session 级**，跨用例关联必须共享）提供。`CaseRunner` / `RequestHandler` 只收不 new。整轮测试共用 1 条连接（不是每条用例一条）。
+
+**占位符替换必须产副本**：`resolve_case()` 返回 `ResolvedCase`，**绝不就地改原 case** —— `ExecuteCase` 是收集阶段构造、整个 session 共用的（含 `--reruns`），就地改会让第二遍跑到脏数据。
+
+**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集（`test_add_user.py` 排在 `test_login.py` 前），"登录先跑"天然不成立。要前置数据就声明 `conftest` 的 `login` fixture，见 `testcase/test_user.py`。
 
 **文档**：`docs/代码规范.md`（写代码前看）、`docs/interface_test_framework_design_v2.md`、`docs/framework_exception_design_methodology.md`、`docs/修改方案.txt`
 
@@ -99,15 +107,16 @@ runner/CaseRunner.run(case)   编排，只三行
 
 | 目录 | 干什么 |
 |---|---|
-| `testcase/` | 测试用例（`test_login.py`）；`testcase/test_/` 是老用例备份，**pytest 不收**（`norecursedirs`） |
+| `testcase/` | 测试用例（`test_login.py` / `test_user.py`）；`testcase/test_/` 是老用例备份，**pytest 不收**（`norecursedirs`） |
 | `framework/` | 框架本体（见上表），只放活代码 |
+| `tests/` | **框架自身的单测**。不在 `testpaths` 里，要显式 `pytest tests/` |
 | `data/` | 测试数据 yaml（`login_cases.yaml` / `add_user_cases.yaml`） |
 | `docs/` | 设计文档 + 代码规范 |
 | `archive/` | 归档：旧链路参考代码 + 被取代的旧设计文档 |
 | `config/` | 配置（空，待做） |
-| `logs/` | 日志（按天切） |
+| `logs/` | 日志（按天切，**已脱敏**） |
 | `reports/` | 测试报告（allure，空） |
-| `conftest.py` | `base_url` / `client` fixture + `init_logger()` |
+| `conftest.py` | `base_url` / `client` / `context` / `login` fixture + `init_logger()` |
 | `pytest.ini` | pytest 配置 |
 
 ---
@@ -133,15 +142,19 @@ runner/CaseRunner.run(case)   编排，只三行
 | 4 | 代码规范（阿里手册适配 Python）+ 异常体系 | ✅ |
 | 5 | 目录语义梳理（constants / contracts / infra / exception） | ✅ |
 | 6 | 依赖注入：`HttpClient` 由 session 级 fixture 注入，修掉 session 泄漏 | ✅ |
-| 7 | config 收敛 + context/extract | ⬜ **下一步** |
+| 7 | 接口关联：`context/` 变量池 + `${}` 占位符 + `extract_handler`；日志增强（分段 / 脱敏 / 带栈） | ✅ |
+| 8 | config 收敛（base_url / 账号 / 超时 现硬编码在 conftest） | ⬜ **下一步** |
 
 ---
 
 ## 命令速查
 
 ```bash
-# 跑全部
+# 跑接口用例（testpaths = testcase）
 ./.venv/Scripts/python.exe -m pytest
+
+# 跑框架自身的单测（不依赖被测服务，改 framework/ 后先跑这个）
+./.venv/Scripts/python.exe -m pytest tests/
 
 # 只收集不执行（条数不对时第一件事）
 ./.venv/Scripts/python.exe -m pytest --collect-only -q
@@ -210,13 +223,39 @@ runner/CaseRunner.run(case)   编排，只三行
 
 **⑧ pytest 会递归收 `testpaths` 下的目录** —— `testcase/test_/` 这种备份目录也会被收进来，里面 import 断了就整个 `collection error`，**一条都不跑**。已在 `pytest.ini` 用 `norecursedirs = test_` 排除。
 
+**⑨ `norecursedirs` 写一个值会把默认值整个顶掉** —— 只写 `test_`，pytest 默认的 `.venv` / `.*` / `*.egg` 就全失效了，`pytest .` 会把三方库自带的测试也收进来。要写就得把默认值补回来：`test_ *.egg .* venv build dist __pycache__`。
+
+**⑩ 跨用例关联的用例集不能开 `-n`** —— 变量池（`Context`）是**进程内**的，xdist 每个 worker 各一份，A 提取的 token B 看不见；而且用例还会被重新分配到不同 worker，"谁先跑"都不保证。这是「用例间有依赖」和「分布式」的固有冲突，换任何变量池实现都解决不了。
+
+**⑪ `contains` 是精确等值匹配，不是子串匹配** —— 断言值要写**完整消息**。响应是 `"新增失败，参数缺失或token失效"` 时，yaml 里写 `msg: 新增失败` **会挂**。（课程项目的 `contains` 是子串匹配，两者语义不同。）
+
 ---
 
 ## 下一步
 
-**配置收敛 + context/extract**：
+**config 收敛**：
 
-1. `config/` —— 把散落的 `http://127.0.0.1:8787` / `test01/admin123` 收进配置，`conftest` 的 `base_url` 从配置读；
-2. `framework/context/` + `handler/extract_handler.py` —— 动态数据提取（token / user_id），`Runner.run` 里那句 `# 3. 提取` 落地。
+1. `config/` —— 把散落的 `http://127.0.0.1:8787` / `test01` `admin123` 收进配置，`conftest` 的 `base_url` 和 `login` fixture 从配置读；
+2. 顺手：`environment.xml` 可以从同一份配置**生成**（allure 报告的环境信息页）。
 
 （再往后：allure 报告 —— 第 26 集。）
+
+---
+
+## 接口关联怎么用（阶段 7 产物）
+
+```yaml
+# 1. 提取：跑完这条用例，把响应里的 token 存进变量池
+extract:
+  token: $.token
+
+# 2. 引用：后续用例用 ${token} 取值
+data:
+  token: "${token}"
+  username: "user_${timestamp()}"     # 也能调函数
+```
+
+- **`${key}`** 变量引用（支持 `a.b.c` 点号路径）；**`${func(args)}`** 函数调用。
+- 整个值恰好是一个占位符时**保留原类型**（`${count}` 取到 int 就是 int），混排在字符串里则拼接。
+- 函数市场在 `framework/context/functions.py`，加函数 = 写函数 + 挂 `@register`，框架别处不用改。
+- **跨接口关联要写 fixture**（见 `conftest.py` 的 `login`）—— 靠用例执行顺序不可靠，原因见坑 ⑩。

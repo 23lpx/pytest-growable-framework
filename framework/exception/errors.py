@@ -21,6 +21,14 @@ class ModelError(FrameworkError):
     """模型层错误。"""
 
 
+class ContextError(FrameworkError):
+    """变量池相关错误：变量不存在 / 路径中间层类型不对 / 占位符语法问题。
+
+    来自 Context（含 replacer）。和 ExtractError 分开，是因为根因不同 ——
+    一个是「响应里取不到」，一个是「池子里没有这个 key」，混用会让排错变糊。
+    """
+
+
 class RequestError(FrameworkError):
     """HTTP 请求失败：网络错误 / 超时 / 请求异常。来自 Client。"""
 

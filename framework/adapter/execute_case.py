@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 from _pytest.mark.structures import ParameterSet
@@ -20,7 +20,8 @@ class ExecuteCase:
     以后不跑 pytest 了，就再加一个 to_xxx()，CaseModel 不用动。
     """
 
-    # ⚠️ 字段须与 framework/contracts.py 的 CaseLike 保持一致（两处同步改）
+    # ⚠️ 字段须与 framework/contracts.py 的 CaseLike、context/replacer.py 的
+    #    ResolvedCase 保持一致（三处同步改）
 
     # 接口级
     api_name: str
@@ -32,6 +33,8 @@ class ExecuteCase:
     case_name: str
     data: dict
     validations: list
+    # 带默认值的字段必须放最后，否则 dataclass 报 non-default argument follows default
+    extracts: dict = field(default_factory=dict)
 
     @classmethod
     def from_model(cls, case_model: CaseModel) -> "list[ExecuteCase]":
@@ -45,6 +48,7 @@ class ExecuteCase:
                 case_name=c.case_name,
                 data=c.data,
                 validations=c.validations,
+                extracts=c.extracts,
             )
             for c in case_model.cases
         ]

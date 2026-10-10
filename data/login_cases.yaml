@@ -15,6 +15,10 @@ test_cases:
           msg: 登录成功
       - contains:
           msg_code: 200
+    # 提取出来给后续接口用：${token} 就能取到
+    extract:
+      token: $.token
+      user_id: $.userId
 
   - case_name: 密码错误
     data:
