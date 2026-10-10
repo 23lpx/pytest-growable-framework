@@ -1,0 +1,19 @@
+# ---- Python 编译产物 ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- 虚拟环境 ----
+.venv/
+venv/
+
+# ---- pytest ----
+.pytest_cache/
+
+# ---- 运行产物（日志 / 报告）----
+logs/
+reports/
+
+# ---- IDE / 本机配置 ----
+.idea/
+.mcp.json
