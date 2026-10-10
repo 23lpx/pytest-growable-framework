@@ -89,6 +89,8 @@ runner/CaseRunner.run(case)   编排，只三行
 | context | `framework/context/` | 动态数据 / 变量传递 | ⬜ 空 |
 | config | `config/` | 配置（base_url / 账号 / 超时） | ⬜ 空（base_url 现硬编码在 conftest） |
 
+**资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`CaseRunner` / `RequestHandler` 只收不 new。整轮测试共用 1 条连接（不是每条用例一条）。
+
 **文档**：`docs/代码规范.md`（写代码前看）、`docs/interface_test_framework_design_v2.md`、`docs/framework_exception_design_methodology.md`、`docs/修改方案.txt`
 
 ---
@@ -130,7 +132,8 @@ runner/CaseRunner.run(case)   编排，只三行
 | 3 | Runner 瘦身 + 抽 RequestHandler / ValidationHandler | ✅ |
 | 4 | 代码规范（阿里手册适配 Python）+ 异常体系 | ✅ |
 | 5 | 目录语义梳理（constants / contracts / infra / exception） | ✅ |
-| 6 | config 收敛 + context/extract | ⬜ **下一步** |
+| 6 | 依赖注入：`HttpClient` 由 session 级 fixture 注入，修掉 session 泄漏 | ✅ |
+| 7 | config 收敛 + context/extract | ⬜ **下一步** |
 
 ---
 
