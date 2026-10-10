@@ -29,6 +29,26 @@ Python 3.12，venv 在 `.venv/`。**必须用 `.venv` 里的解释器跑，禁�
 
 Windows 控制台中文乱码时加 `PYTHONIOENCODING=utf-8`。
 
+## Git 工作流
+
+- **平时在 `develop` 分支开发**，一版做完再合进 `main`。
+- `main` 只放「已完成的版本」，**不直接在 main 上开发 / 提交**。
+- 提交前 `pytest` 要绿。
+- Claude Code 提的 commit，message 结尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
+
+```bash
+git checkout develop                    # 日常都在 develop
+# ...写代码、跑测试...
+git commit -m "..."
+git push origin develop                 # 推 develop
+
+# 一版做好 -> 合进 main
+git checkout main
+git merge --no-ff develop               # --no-ff 留一个合并点，标出版本边界
+git push origin main
+git checkout develop                    # 切回来继续
+```
+
 ## 架构：单向分层，数据驱动
 
 数据流是单向的，改代码前先想清楚动的是哪一层：
