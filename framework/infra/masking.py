@@ -53,11 +53,40 @@ def mask_text(text: str) -> str:
     return _TEXT_PATTERN.sub(rf"\1\2{MaskConfig.MASK}", text)
 
 
+def install_masking() -> None:
+    """装一个全局的 record 工厂，让**每一条**日志在创建时就打码。
+
+    为什么不在 logger 上挂 Filter：
+      logger 的 filter 只在 `Logger.handle()` 里对**直接记到该 logger**的消息执行，
+      对从**子 logger 冒泡上来**的不执行。而框架里的日志全是
+      `logging.getLogger(__name__)`（形如 framework.client.http_client），
+      挂在 "framework" 上的 filter 根本轮不到 —— 这是个静默失效的坑。
+
+    为什么不在 handler 上挂 Filter：
+      pytest 失败时显示的「Captured log」用的是**它自己的 handler**，
+      用例执行期间才动态挂到 root 上，我们够不着。
+
+    所以从源头下手：record 一诞生就换成打码后的 args，之后所有出口
+    （我们的控制台/文件、pytest 的捕获）拿到的都是同一份数据，不存在漏网。
+    """
+    original_factory = logging.getLogRecordFactory()
+
+    def masking_factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
+        record = original_factory(*args, **kwargs)
+        if isinstance(record.args, dict):
+            record.args = mask(record.args)
+        elif isinstance(record.args, tuple):
+            record.args = tuple(mask(arg) for arg in record.args)
+        return record
+
+    logging.setLogRecordFactory(masking_factory)
+
+
 class MaskingFormatter(logging.Formatter):
     """先按 key 打码结构化 args，再对最终文本兜底。
 
-    按 key 打码要求日志写成 %s 风格（logger.debug("请求参数: %s", data)）——
-    用 f-string 预渲染成字符串就只剩正则兜底这一条路了。
+    和 MaskingFilter 是双保险：Filter 管所有出口，Formatter 额外负责
+    **最终文本和异常栈**的正则兜底（这部分 Filter 拿不到）。
     """
 
     def format(self, record: logging.LogRecord) -> str:

@@ -156,6 +156,9 @@ runner/CaseRunner.run(case)   编排，四步
 # 跑框架自身的单测（不依赖被测服务，改 framework/ 后先跑这个）
 ./.venv/Scripts/python.exe -m pytest tests/
 
+# 看实时日志（默认日志被 pytest 捕获，只在用例失败时显示；加了 -s 就实时刷屏）
+./.venv/Scripts/python.exe -m pytest -s
+
 # 只收集不执行（条数不对时第一件事）
 ./.venv/Scripts/python.exe -m pytest --collect-only -q
 
@@ -228,6 +231,10 @@ runner/CaseRunner.run(case)   编排，四步
 **⑩ 跨用例关联的用例集不能开 `-n`** —— 变量池（`Context`）是**进程内**的，xdist 每个 worker 各一份，A 提取的 token B 看不见；而且用例还会被重新分配到不同 worker，"谁先跑"都不保证。这是「用例间有依赖」和「分布式」的固有冲突，换任何变量池实现都解决不了。
 
 **⑪ `contains` 是精确等值匹配，不是子串匹配** —— 断言值要写**完整消息**。响应是 `"新增失败，参数缺失或token失效"` 时，yaml 里写 `msg: 新增失败` **会挂**。（课程项目的 `contains` 是子串匹配，两者语义不同。）
+
+**⑫ `logger.propagate = False` 会让 pytest 看不见日志** —— pytest 的日志捕获（失败时那段 `Captured log`）挂在 **root logger** 上。一旦 `propagate=False` 断了冒泡，用例失败时报告里**一条日志都没有**，控制台又被 stderr 捕获吞掉，等于瞎了。**别设它。**
+
+**⑬ logger 级 Filter 管不到冒泡上来的日志** —— `logger.addFilter()` 只在 `Logger.handle()` 里对**直接记到该 logger** 的消息执行。框架里日志全是 `logging.getLogger(__name__)`（`framework.xxx`），挂在 `"framework"` 上的 filter 根本轮不到 —— **而且它静默失效**，不报错。要打码就挂 record 工厂（`logging.setLogRecordFactory`），从源头下手。
 
 ---
 

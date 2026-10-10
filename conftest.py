@@ -14,10 +14,23 @@ init_logger()
 LOGIN_CASES = '/data/login_cases.yaml'
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """把「被测服务地址」做成命令行参数 —— 换环境不用改代码。
+
+    base_url 不敏感、每个环境都可能不同，适合走命令行；
+    账号密码这类敏感的不能上命令行（会进 shell history / CI 日志），
+    留给以后的 config 模块。
+    """
+    parser.addoption(
+        "--base-url",
+        default="http://127.0.0.1:8787",
+        help="被测服务地址（默认本地 flaskServer）",
+    )
+
+
 @pytest.fixture(scope='session')
-def base_url() -> str:
-    test_url = 'http://127.0.0.1:8787'
-    return test_url
+def base_url(request: pytest.FixtureRequest) -> str:
+    return request.config.getoption("--base-url")
 
 
 @pytest.fixture(scope='session')

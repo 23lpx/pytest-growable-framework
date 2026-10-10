@@ -3,7 +3,7 @@ import os
 from logging.handlers import TimedRotatingFileHandler
 
 from framework.constants.logging import LogConfig
-from framework.infra.masking import MaskingFormatter
+from framework.infra.masking import MaskingFormatter, install_masking
 from framework.infra.path import _project_root
 
 
@@ -24,9 +24,14 @@ def init_logger() -> None:
 
     # logger 本身放到最低，具体过滤交给各 handler 的 level
     logger.setLevel(logging.DEBUG)
-    # 不再往上冒泡到 root —— root 那边可能有别家（如 pytest）的 handler，
-    # 冒上去会重复输出
-    logger.propagate = False
+
+    # 从源头打码：record 一创建就换掉敏感字段，之后所有出口
+    # （我们的控制台/文件、pytest 的「Captured log」）拿到的都是打码数据。
+    install_masking()
+
+    # 注意**不能设 propagate = False** —— 那会让日志冒不到 root，而 pytest 的
+    # 日志捕获正是挂在 root 上：一旦断开，用例失败时报告里一条日志都看不到，
+    # 控制台又被 stderr 捕获吞掉，等于瞎了。
 
     # 两个 handler 共用同一个脱敏 formatter，保证哪一路输出都打码
     formatter = MaskingFormatter(LogConfig.FORMAT)
