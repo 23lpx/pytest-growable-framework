@@ -35,6 +35,7 @@ class ExecuteCase:
     validations: list
     # 带默认值的字段必须放最后，否则 dataclass 报 non-default argument follows default
     extracts: dict = field(default_factory=dict)
+    db_validations: list = field(default_factory=list)
 
     @classmethod
     def from_model(cls, case_model: CaseModel) -> "list[ExecuteCase]":
@@ -49,6 +50,7 @@ class ExecuteCase:
                 data=c.data,
                 validations=c.validations,
                 extracts=c.extracts,
+                db_validations=c.db_validations,
             )
             for c in case_model.cases
         ]

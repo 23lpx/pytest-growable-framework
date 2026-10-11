@@ -13,3 +13,13 @@ http:
 login:
   username: test01
   password: admin123
+
+# 查库校验用的库 —— 注意这是**测试自己的库**（工作库），不是被测服务的库。
+# demo 库随便造随便删。真实项目里，被测系统的库通常只给只读账号，造数得走接口。
+# 端口故意用 3307：3306 是本机其他项目共用的，别去搅。
+db:
+  host: 127.0.0.1
+  port: 3307
+  user: root
+  password: CHANGE_ME_DB_PWD
+  database: demo

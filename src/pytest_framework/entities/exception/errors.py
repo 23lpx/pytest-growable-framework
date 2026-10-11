@@ -38,4 +38,20 @@ class ExtractError(FrameworkError):
 
 
 class ValidationError(FrameworkError):
-    """响应校验失败。来自 Validation Handler。"""
+    """校验失败：响应没达预期，或库里查到的和期望对不上。
+
+    来自 Validation Handler / DbChecker。两者共用一个异常，是因为对使用者来说
+    是同一件事（「断言没通过」），上层处理方式也一样。
+    """
+
+
+class DatabaseError(FrameworkError):
+    """数据库本身出问题：连不上 / SQL 语法错 / 表名列名非法。
+
+    来自 DB 底座与 DbChecker（生成 SQL 那一步）。
+
+    ⚠️ 和 ValidationError 的分工要守住：**「查不动库」是 DatabaseError，
+    「查到了但对不上」才是 ValidationError**。一个是环境坏了（配置错、服务没起），
+    一个是用例失败（断言写了但功能有问题）。混在一起，排错时就会盯着断言看，
+    而真正的问题在连接配置里。
+    """

@@ -4,8 +4,10 @@ from typing import Iterator
 
 import pytest
 
+from pytest_framework.adapters.db_checker import DbChecker
 from pytest_framework.adapters.execute_case import ExecuteCase
 from pytest_framework.infrastructure.http import HttpClient
+from pytest_framework.infrastructure.db import MySqlExecutor
 from pytest_framework.adapters.config import Config
 from pytest_framework.entities.context.context import Context
 from pytest_framework.infrastructure.logging.logger import init_logger
@@ -101,6 +103,33 @@ def login(context: Context, client: HttpClient) -> None:
     """
     login_case = ExecuteCase.from_model(CaseModel(LOGIN_CASES))[0]
     CaseRunner(client, context).run(login_case)
+
+
+@pytest.fixture(scope='session')
+def db_checker(config: Config) -> Iterator[DbChecker | None]:
+    """查库校验器 —— 库校验那条路的入口。
+
+    **没配 db 就返回 None**：纯接口用例照样跑，不会被数据库的可用性牵连。
+    只有声明了 `db:` 断言的用例才会真去建连接。
+
+    懒加载同样是白捡的：没有用例要它（也没别的 fixture 依赖它），这个 fixture
+    根本不会被求值 —— 连 TCP 连接都不会建。
+
+    和 `client` 一样：session 级 + 谁创建谁销毁（连接复用，跑完关掉）。
+    """
+    if not config.exists('db.host'):
+        yield None
+        return
+
+    executor = MySqlExecutor(
+        host=config.get('db.host'),
+        port=config.get('db.port'),
+        user=config.get('db.user'),
+        password=config.get('db.password'),
+        database=config.get('db.database'),
+    )
+    yield DbChecker(executor)
+    executor.close()
 
 
 @pytest.fixture(scope='session', autouse=True)

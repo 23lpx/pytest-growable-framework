@@ -12,6 +12,7 @@ dependencies = [
     "requests",
     "pyyaml",
     "jsonpath",
+    "pymysql",
 ]
 
 [project.optional-dependencies]

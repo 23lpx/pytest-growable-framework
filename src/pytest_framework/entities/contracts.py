@@ -30,6 +30,7 @@ class CaseLike(Protocol):
     data: dict
     validations: list
     extracts: dict
+    db_validations: list
 
 
 class ResponseLike(Protocol):

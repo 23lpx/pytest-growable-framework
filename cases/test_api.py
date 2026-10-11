@@ -1,6 +1,7 @@
 import allure
 import pytest
 
+from pytest_framework.adapters.db_checker import DbChecker
 from pytest_framework.adapters.execute_case import ExecuteCase
 from pytest_framework.infrastructure.http import HttpClient
 from pytest_framework.entities.context.context import Context
@@ -27,7 +28,14 @@ class TestApi:
         ExecuteCase.discover(),
         ids=lambda c: f"{c.api_name}:{c.case_name}",
     )
-    def test_api(self, case: ExecuteCase, client: HttpClient, context: Context, login) -> None:
+    def test_api(
+        self,
+        case: ExecuteCase,
+        client: HttpClient,
+        context: Context,
+        db_checker: DbChecker | None,
+        login,
+    ) -> None:
         # 报告里按「接口」分组 —— 参数化 id 里虽然带着接口名，但那是字符串，分不了组
         allure.dynamic.story(case.api_name)
-        CaseRunner(client, context).run(case)
+        CaseRunner(client, context, db_checker).run(case)

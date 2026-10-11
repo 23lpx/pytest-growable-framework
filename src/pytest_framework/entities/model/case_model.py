@@ -18,8 +18,9 @@ class TestCase:
     case_name: str
     data: dict
     validations: list
-    # 带默认值的字段必须放最后（dataclass 的规则）；老 yaml 不写 extract 就是空 dict
+    # 带默认值的字段必须放最后（dataclass 的规则）；老 yaml 不写 extract / db 就是空
     extracts: dict = field(default_factory=dict)
+    db_validations: list = field(default_factory=list)
 
 
 class CaseModel:
@@ -83,6 +84,7 @@ class CaseModel:
                     data=case['data'],
                     validations=case['validation'],
                     extracts=self._parse_extracts(case),
+                    db_validations=self._parse_db(case),
                 ))
         except (KeyError, TypeError) as e:
             raise CaseParseError(f"用例结构不符合规范，字段缺失或类型不对: {e}") from e
@@ -99,3 +101,15 @@ class CaseModel:
         if not isinstance(extracts, dict):
             raise CaseParseError(f"extract 必须是 键值对: {extracts!r}")
         return extracts
+
+    @staticmethod
+    def _parse_db(case: dict) -> list:
+        """取用例的 db 段（「查哪张表、什么条件、期望什么」的规则列表）。
+
+        和 _parse_extracts 同理：形状不对要在**解析期**暴露，
+        别等到运行期才炸。老 yaml 不写 db 就是空列表，零改动兼容。
+        """
+        db_validations = case.get('db', [])
+        if not isinstance(db_validations, list):
+            raise CaseParseError(f"db 必须是列表: {db_validations!r}")
+        return db_validations
