@@ -63,8 +63,8 @@ def login(context: Context, client: HttpClient) -> None:
     """前置登录：整个会话只登一次，把 token 写进变量池。
 
     依赖已登录状态的用例，声明这个 fixture 就行 —— 比「靠用例执行顺序」可靠得多。
-    顺序不可靠的原因：pytest 按**文件名字典序**收集用例，
-    test_add_user.py 会排在 test_login.py 前面（a < l），"登录先跑"根本不成立。
+    顺序不可靠的原因：用例的收集顺序由 pytest 定（文件名字典序 / 参数化列表序），
+    "登录先跑"根本不成立。
 
     取 login_cases 的第一条（成功登录那条，它带 extract）。
     """

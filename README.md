@@ -275,10 +275,11 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 
 **config 收敛**：
 
-1. `config/` —— 把散落的 `http://127.0.0.1:8787` / `test01` `admin123` 收进配置，`conftest` 的 `base_url` 和 `login` fixture 从配置读；
+1. `config/` —— 把还散落的**账号密码**（`test01` / `admin123`，硬编码在 `conftest` 的 `login` fixture）收进配置。
+   （`base_url` 已经走 `--base-url` 命令行参数了，不在这里。）
 2. 顺手：`environment.xml` 可以从同一份配置**生成**（allure 报告的环境信息页）。
 
-（再往后：allure 报告 —— 第 26 集。）
+（再往后：allure 报告 —— 第 26 集；MySQL 数据校验；自动化集成。）
 
 ---
 
@@ -298,7 +299,7 @@ data:
 - **`${key}`** 变量引用（支持 `a.b.c` 点号路径）；**`${func(args)}`** 函数调用。
 - 整个值恰好是一个占位符时**保留原类型**（`${count}` 取到 int 就是 int），混排在字符串里则拼接。
 - 函数市场在 `framework/context/functions.py`，加函数 = 写函数 + 挂 `@register`，框架别处不用改。
-- **跨接口关联要写 fixture**（见 `conftest.py` 的 `login`）—— 靠用例执行顺序不可靠，原因见坑 ⑩。
+- **跨接口关联要写 fixture**（见 `conftest.py` 的 `login`）—— 靠用例执行顺序不可靠，原因见坑 ⑩。单接口用例现在**统一挂**这个 fixture（session 级只登一次，零成本）。
 
 ---
 
