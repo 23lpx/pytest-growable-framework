@@ -9,10 +9,11 @@ import pytest
 
 
 class FakeResponse:
-    """桩响应。
+    """桩响应：`contracts.ResponseLike` 契约的一个**合法实现**。
 
     单测不连被测服务，也**不引新依赖**（responses / requests-mock 都没装）——
-    requests.Response 只出现在类型标注里，鸭子类型够用。
+    handler 依赖的是契约（三个成员），不是 `requests.Response` 这个具体类，
+    所以这个桩不是「鸭子类型骗类型检查」，而是真的对得上接口。
     """
 
     def __init__(

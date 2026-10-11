@@ -1,8 +1,5 @@
 from dataclasses import dataclass, field
 
-import pytest
-from _pytest.mark.structures import ParameterSet
-
 from framework.model.case_model import CaseModel
 
 
@@ -14,10 +11,13 @@ class ExecuteCase:
       - pytest 拿它做参数化（一条 pytest 节点 = 一个 ExecuteCase）
       - Runner 只认它，从里面取 url/method/headers/data 就能发请求
 
-    适配职责都收在这个类里（下面两个方法）：
-      - from_model()      : CaseModel  -> list[ExecuteCase]
-      - to_pytest_param() : ExecuteCase -> pytest.param
-    以后不跑 pytest 了，就再加一个 to_xxx()，CaseModel 不用动。
+    适配职责收在这两个 classmethod 里：
+      - from_model() : CaseModel -> list[ExecuteCase]
+      - discover()   : 扫目录 + 展平
+
+    ⚠️ 这里**不 import pytest** —— pytest 只是「谁消费它」（`testcase/` 把它丢给
+    parametrize），不是「它是什么」。原先有个 to_pytest_param() 顺手返回 pytest.param，
+    但全仓没人调用，还牵进了 `_pytest.mark.structures` 这种私有 API，已删。
     """
 
     # ⚠️ 字段须与 framework/contracts.py 的 CaseLike、context/replacer.py 的
@@ -64,6 +64,3 @@ class ExecuteCase:
         for model in CaseModel.discover(dir_path):
             cases.extend(cls.from_model(model))
         return cases
-
-    def to_pytest_param(self) -> ParameterSet:
-        return pytest.param(self, id=self.case_name)

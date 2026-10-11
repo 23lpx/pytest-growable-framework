@@ -1,9 +1,8 @@
 import logging
 
-from framework.client.http_client import HttpClient
 from framework.context.context import Context
 from framework.context.replacer import resolve_case
-from framework.contracts import CaseLike
+from framework.contracts import CaseLike, Sender
 from framework.exception.base import FrameworkError
 from framework.handler.extract_handler import ExtractHandler
 from framework.handler.request_handler import RequestHandler
@@ -21,13 +20,14 @@ class CaseRunner:
     免得「拿一条失败响应的 token 去跑后面的用例」，把失败的根因搅浑。
 
     不做 case 循环、不做测试发现、不管生命周期 —— 那些是 pytest 的活。
-    HttpClient 和 Context 都由外面注入（不 new、不 close），生命周期归 fixture。
+    `client`（满足 Sender 端口，不一定是 HttpClient）和 `Context` 都由外面注入
+    （不 new、不 close），生命周期归 fixture。
 
     异常：不吞。捕获到框架异常就补上 case_name 上下文、记日志，然后原样往上抛，
     由 pytest 决定测试失败。
     """
 
-    def __init__(self, client: HttpClient, context: Context) -> None:
+    def __init__(self, client: Sender, context: Context) -> None:
         self.context = context
         self.request_handler = RequestHandler(client)
         self.validation_handler = ValidationHandler()

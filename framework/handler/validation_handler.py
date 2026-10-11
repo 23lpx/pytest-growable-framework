@@ -1,9 +1,7 @@
 from typing import Any, Callable
 
-from requests import Response
-
 from framework.constants.validation import ValidationOp
-from framework.contracts import CaseLike
+from framework.contracts import CaseLike, ResponseLike
 from framework.exception.errors import ValidationError
 
 
@@ -22,7 +20,7 @@ class ValidationHandler:
         ValidationOp.CONTAINS: "_contains",
     }
 
-    def validate(self, case: CaseLike, resp: Response) -> None:
+    def validate(self, case: CaseLike, resp: ResponseLike) -> None:
         actual = self._parse(resp)
 
         for validation in case.validations:
@@ -38,7 +36,7 @@ class ValidationHandler:
                 handler(value, actual)
 
     @staticmethod
-    def _parse(resp: Response) -> dict:
+    def _parse(resp: ResponseLike) -> dict:
         """响应必须是 JSON 对象。
 
         这一步的守卫是必需的：少了它，响应是数组/标量时下面的 .items() 会抛

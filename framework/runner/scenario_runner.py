@@ -1,8 +1,8 @@
 import logging
 
 from framework.adapter.execute_case import ExecuteCase
-from framework.client.http_client import HttpClient
 from framework.context.context import Context
+from framework.contracts import Sender
 from framework.exception.base import FrameworkError
 from framework.infra import report
 from framework.model.scenario_model import ScenarioModel
@@ -26,7 +26,7 @@ class ScenarioRunner:
     「前置」就是第一步（登录步），拿到的 token 直接进变量池供后面几步引用。
     """
 
-    def __init__(self, client: HttpClient, context: Context) -> None:
+    def __init__(self, client: Sender, context: Context) -> None:
         self.case_runner = CaseRunner(client, context)
 
     def run(self, scenario: ScenarioModel) -> None:

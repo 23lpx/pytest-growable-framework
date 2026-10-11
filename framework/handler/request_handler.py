@@ -1,8 +1,5 @@
-from requests import Response
-
-from framework.client.http_client import HttpClient
 from framework.constants.http import Header, HttpMethod, HttpParam
-from framework.contracts import CaseLike
+from framework.contracts import CaseLike, ResponseLike, Sender
 
 
 class RequestHandler:
@@ -16,17 +13,21 @@ class RequestHandler:
 
     只干「发」这一件事 —— 它不认识 yaml、不做断言。
 
-    HttpClient 由外面注入（不自己 new），所以它的生命周期不归这里管 ——
+    ⚠️ 依赖的是 **contracts.Sender 端口**，不是 client.HttpClient 这个具体类 ——
+    依赖倒置：内层定契约、外层（HttpClient）实现，conftest 注入。
+    换 HTTP 库、甚至换成别的传输方式，这个类一行不用改。
+
+    它由外面注入（不自己 new），所以它的生命周期不归这里管 ——
     谁创建谁销毁，交给 fixture。
 
     注意别和 client 层的 HttpClient 混了：那个是「HTTP 底座」，这个只是执行流程里发请求的那一步。
     """
 
-    def __init__(self, client: HttpClient) -> None:
+    def __init__(self, client: Sender) -> None:
         self.client = client
 
-    def send(self, case: CaseLike) -> Response:
-        return self.client._request(
+    def send(self, case: CaseLike) -> ResponseLike:
+        return self.client.request(
             method=case.method,
             path=case.url,
             headers=case.headers,

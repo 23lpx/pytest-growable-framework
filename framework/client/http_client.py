@@ -41,7 +41,13 @@ class HttpClient:
             return path
         return f"{self.base_url}/{path.lstrip('/')}"
 
-    def _request(self, method: str, path: str, **kwargs) -> Response:
+    def request(self, method: str, path: str, **kwargs) -> Response:
+        """按**变量方法**发请求；下面 get/post/put/delete 是它的便捷包装。
+
+        为什么是公开方法而不是 `_request`：`RequestHandler` 依赖的是
+        `contracts.Sender` 端口，方法名对不上就实现不了那个契约 ——
+        case 的 method 是数据里的变量，走不了 get/post 这类固定方法。
+        """
         kwargs.setdefault("timeout", self.timeout)
         url = self._build_url(path)
 
@@ -83,16 +89,16 @@ class HttpClient:
             return resp.text[:1000]
 
     def get(self, path: str, **kwargs) -> Response:
-        return self._request("GET", path, **kwargs)
+        return self.request("GET", path, **kwargs)
 
     def post(self, path: str, **kwargs) -> Response:
-        return self._request("POST", path, **kwargs)
+        return self.request("POST", path, **kwargs)
 
     def put(self, path: str, **kwargs) -> Response:
-        return self._request("PUT", path, **kwargs)
+        return self.request("PUT", path, **kwargs)
 
     def delete(self, path: str, **kwargs) -> Response:
-        return self._request("DELETE", path, **kwargs)
+        return self.request("DELETE", path, **kwargs)
 
     def close(self) -> None:
         self.session.close()

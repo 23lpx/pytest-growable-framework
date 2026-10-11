@@ -3,10 +3,9 @@
 from typing import Any
 
 import jsonpath
-from requests import Response
 
 from framework.context.context import Context
-from framework.contracts import CaseLike
+from framework.contracts import CaseLike, ResponseLike
 from framework.exception.errors import ExtractError
 
 
@@ -18,7 +17,7 @@ class ExtractHandler:
     悄悄跳过会让这条用例看起来是绿的，等症状在下一条用例上爆发，排查时找错地方。
     """
 
-    def extract(self, case: CaseLike, resp: Response, context: Context) -> None:
+    def extract(self, case: CaseLike, resp: ResponseLike, context: Context) -> None:
         # 提前退出：大多数用例不提取，没必要白解析一遍 JSON
         if not case.extracts:
             return
@@ -28,7 +27,7 @@ class ExtractHandler:
             context.set(key, self._pick(data, expr))
 
     @staticmethod
-    def _parse(resp: Response) -> Any:
+    def _parse(resp: ResponseLike) -> Any:
         try:
             return resp.json()
         except ValueError as e:

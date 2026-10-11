@@ -106,7 +106,7 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | reader | `framework/reader/read_yaml.py` | 读文件 → dict | ✅ |
 | model | `framework/model/case_model.py` | 封装（一个接口的用例集）+ `discover()` 扫目录 | ✅ |
 | model | `framework/model/scenario_model.py` | 场景解析（list → list[CaseModel]）+ `discover()` 扫目录 | ✅ |
-| adapter | `framework/adapter/execute_case.py` | 适配（→ pytest.param）+ `discover()` 展平 | ✅ |
+| adapter | `framework/adapter/execute_case.py` | 适配（模型 → 执行单元）+ `discover()` 展平。**不 import pytest** | ✅ |
 | runner | `framework/runner/case_runner.py` | 编排单条用例（不认识"列表/场景"） | ✅ |
 | runner | `framework/runner/scenario_runner.py` | 场景编排（顺序 + 步骤日志，内部调 CaseRunner） | ✅ |
 | handler | `framework/handler/request_handler.py` | 发送请求 | ✅ |
@@ -116,12 +116,14 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | context | `framework/context/` | 变量池 / 占位符解析 / 函数市场 | ✅ |
 | exception | `framework/exception/` | 异常体系 | ✅ |
 | constants | `framework/constants/` | 常量（魔法值收口） | ✅ |
-| contracts | `framework/contracts.py` | 跨层契约（Protocol） | ✅ |
+| contracts | `framework/contracts.py` | 跨层契约（Protocol）：`CaseLike` / `ResponseLike` / `Sender` / `VariableSource` | ✅ |
 | infra | `framework/infra/` | 日志（**含脱敏**）/ 路径 / **报告**（allure 薄封装） | ✅ |
 | tests | `tests/` | 框架自身的单测（不依赖被测服务） | ✅ |
 | config | `framework/config.py` | 配置加载（yaml + 环境变量覆盖），可当 `Context` 的父级 | ✅ |
 
 **资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`Context`（变量池）由 `context` fixture（**session 级**，跨用例关联必须共享）提供。`CaseRunner` / `RequestHandler` 只收不 new。整轮测试共用 1 条连接（不是每条用例一条）。
+
+**依赖倒置：内层只认端口，不认实现** —— `handler` / `runner` 依赖 `contracts.Sender`（端口）+ `contracts.ResponseLike`（响应契约），**不 import `client.HttpClient`、也不 import `requests`**；`adapter` **不 import pytest**。全仓**只有 `conftest` 知道 `HttpClient` 存在**。判据：**内层模块的 import 里有没有出现具体库或外层类**。
 
 **配置当变量池的父级**：`context` fixture 建的是 `Context(parent=config)` —— `${...}` 因此只有**一个入口**：`${token}` 查变量层（运行时提取的），`${login.username}` 落到配置层（`config/config.yaml`）。**配置层只读**：用例 `set` 同名 key 只写自己那层，覆盖不了配置。`Context` 只认 `VariableSource` 契约，**不认识 `Config`** —— 换任何别的来源都行。
 

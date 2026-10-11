@@ -92,7 +92,7 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 | `framework/reader/read_yaml.py` | 读文件 → dict。抛 `YamlReadError` |
 | `framework/model/case_model.py` | 封装。`ApiCase` / `TestCase` / `CaseModel`（一个接口 + 它的用例）。抛 `CaseParseError`。`from_dict()` 供场景层复用 |
 | `framework/model/scenario_model.py` | 场景解析。根节点 list → `list[CaseModel]`。**只解析，不编排** |
-| `framework/adapter/execute_case.py` | 适配。`ExecuteCase` 带接口级+用例级信息，`from_model()` / `to_pytest_param()` |
+| `framework/adapter/execute_case.py` | 适配。`ExecuteCase` 带接口级+用例级信息，`from_model()` / `discover()`。**不 import pytest** |
 | `framework/runner/case_runner.py` | 只做编排：解析占位符 → 发送 → 校验 → 提取。**不循环、不管生命周期、不认识"列表/场景"** |
 | `framework/runner/scenario_runner.py` | 场景编排：按 yaml 顺序逐步调 `CaseRunner`；步骤日志；失败补「第 N/M 步」上下文。**不重写四步** |
 | `framework/handler/request_handler.py` | `RequestHandler.send(case)` —— 发请求那一步 |
@@ -105,7 +105,7 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 | `framework/client/http_client.py` | 通用 HTTP 底座（session / timeout / base_url 拼接 / 日志）。**不认识测试概念** |
 | `framework/exception/` | 异常体系（`base.py` + `errors.py`） |
 | `framework/constants/` | 常量，魔法值收口（一个主题一个模块） |
-| `framework/contracts.py` | 跨层契约（Protocol）：`CaseLike`、`VariableSource` |
+| `framework/contracts.py` | 跨层契约（Protocol）：`CaseLike`、`ResponseLike`、`Sender`、`VariableSource` |
 | `framework/infra/` | 基础设施：`logger.py`（命名 logger + 脱敏）/ `masking.py` / `path.py` / `report.py`（allure 薄封装） |
 | `data/api/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
 | `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序）。**加文件 = 加场景** |
@@ -115,6 +115,8 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 | `archive/` | 归档的旧链路参考代码 + 被取代的旧设计文档。**不要 import 它** |
 
 **关键边界**：`HttpClient` 是通用底座，只认纯值（method/path/headers/data），**不许 import 模型**；谁要 `CaseModel`，谁就在 `adapter` / `runner` / `handler` 里。
+
+**依赖倒置：内层只认端口，不认实现**：`handler` / `runner` 依赖的是 `contracts.Sender`（端口）+ `contracts.ResponseLike`（响应契约），**不 import `client.HttpClient`、也不 import `requests`** —— 全仓只有 `conftest` 知道 `HttpClient` 存在。同理 `adapter` 不 import pytest。判据：**内层模块的 import 里有没有出现具体库或外层类**。
 
 **资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`Context`（变量池）由 `context` fixture（**session 级**，跨用例关联必须共享）提供。`CaseRunner` / `RequestHandler` **只收不 new**，不持有生命周期。改动时别把 `new HttpClient` 塞回框架内部。
 
