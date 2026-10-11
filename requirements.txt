@@ -1,9 +1,7 @@
-requests
-pyyaml
-jsonpath
-logging-tree
-pytest
-pytest-ordering
-pytest-rerunfailures
-pytest-xdist
-allure-pytest
+# 依赖的**唯一来源**是 pyproject.toml（运行依赖 + [dev] 依赖都写在那儿）。
+#
+# 这里保留 `-e .[dev]` 只是为了保住老习惯：
+#     ./.venv/Scripts/python.exe -m pip install -r requirements.txt
+# 它会把「这个包本身 + dev 依赖」一起装上，而且指向源码目录（可编辑安装）——
+# 所以改了源码不用重装。
+-e .[dev]

@@ -44,10 +44,10 @@
 Python 3.12，venv 在 `.venv/`。
 
 ```bash
-./.venv/Scripts/python.exe -m pip install -r requirements.txt
+./.venv/Scripts/python.exe -m pip install -r requirements.txt   # 等价于：pip install -e .[dev]
 ```
 
-已装：`requests` / `pyyaml` / `jsonpath` / `pytest` / `pytest-rerunfailures` / `pytest-xdist` / `pytest-ordering` / `logging_tree`
+**依赖的唯一来源是 `pyproject.toml`**（运行依赖 + `[dev]` 依赖都写在那儿）；`requirements.txt` 现在只有一行 `-e .[dev]`，纯粹为了保住老习惯。装完之后这个包本身也是**可编辑安装**（指向 `src/` 里的源码），改代码不用重装。
 
 > ⚠️ **不要直接敲 `pip` 或 `activate`**，一律用 `./.venv/Scripts/python.exe -m pip ...`。
 
@@ -300,7 +300,7 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 **⑫ `logger.propagate = False` 会让 pytest 看不见日志** —— pytest 的日志捕获（失败时那段 `Captured log`）挂在 **root logger** 上。一旦 `propagate=False` 断了冒泡，用例失败时报告里**一条日志都没有**，控制台又被 stderr 捕获吞掉，等于瞎了。**别设它。**
 
-**⑬ logger 级 Filter 管不到冒泡上来的日志** —— `logger.addFilter()` 只在 `Logger.handle()` 里对**直接记到该 logger** 的消息执行。框架里日志全是 `logging.getLogger(__name__)`（`framework.xxx`），挂在 `"framework"` 上的 filter 根本轮不到 —— **而且它静默失效**，不报错。要打码就挂 record 工厂（`logging.setLogRecordFactory`），从源头下手。
+**⑬ logger 级 Filter 管不到冒泡上来的日志** —— `logger.addFilter()` 只在 `Logger.handle()` 里对**直接记到该 logger** 的消息执行。框架里日志全是 `logging.getLogger(__name__)`（`pytest_framework.xxx`），挂在 `"pytest_framework"` 上的 filter 根本轮不到 —— **而且它静默失效**，不报错。要打码就挂 record 工厂（`logging.setLogRecordFactory`），从源头下手。
 
 **⑭ `autouse` fixture 的依赖写在签名里 = 强制求值** —— fixture 的参数在**函数体之前**求值，`autouse` 又作用于整个会话，所以「签名里有 `config`」等于**每次跑 pytest 都加载配置** —— 函数体里那句 `if not 条件: return` 拦不住它。实测后果：配置文件一删，`pytest tests/` 的 **84 条框架单测全 ERROR**。要真惰性就挪进函数体：`cfg = request.getfixturevalue("config")`。（`conftest.py` 的 `_allure_environment` 踩过这个。）
 
