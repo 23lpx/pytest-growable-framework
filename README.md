@@ -57,30 +57,46 @@ Python 3.12，venv 在 `.venv/`。
 
 ```
 data/*.yaml
-   │  reader/YamlRead.read
-   ▼
-model/CaseModel          封装：dict → 统一模型 {api, cases[]}
    │
-   ▼
-adapter/ExecuteCase      适配：模型 → 执行器契约（一条 = 一个 pytest 节点）
+   ├─ 单接口（dict：base_info + test_cases）
+   │     │  reader/YamlRead.read
+   │     ▼
+   │   model/CaseModel            封装：dict → 统一模型 {api, cases[]}
+   │     │
+   │     ▼
+   │   adapter/ExecuteCase        适配：模型 → 执行器契约（一条 = 一个执行单元）
+   │     │
+   │     ▼
+   │   pytest 参数化               ← 多 case 调度权在 pytest 手里
+   │     每条 case 一个节点（保住 -k / -m / 重跑 / -n 的粒度）
    │
-   ▼
-pytest 参数化             ← 多 case 调度权在 pytest 手里
-   │  一次一条 case
-   ▼
-runner/CaseRunner.run(case)   编排，四步
-   ├── context/replacer.resolve_case   解析 ${...} → 产出副本（不改原 case）
-   ├── handler/RequestHandler     → client/HttpClient → 被测接口
-   ├── handler/ValidationHandler  校验（fail-fast：不过就不写变量池）
-   └── handler/ExtractHandler     提取 → context/Context（供后续用例引用）
+   └─ 场景（list：N 个接口块，**顺序即执行顺序**）
+         │  reader/YamlRead.read
+         ▼
+       model/ScenarioModel       = list[CaseModel]，**复用**单接口解析器（只是拼积木）
+         │
+         ▼
+       runner/ScenarioRunner      顺序编排 + 步骤日志（整个场景 = 一个节点）
+         │
+         └────────────┐
+                      ▼
+        runner/CaseRunner.run(case)   ← 两条路径在此汇合，只跑「一条」
+          ├── context/replacer.resolve_case   解析 ${...} → 产出副本（不改原 case）
+          ├── handler/RequestHandler     → client/HttpClient → 被测接口
+          ├── handler/ValidationHandler  校验（fail-fast：不过就不写变量池）
+          └── handler/ExtractHandler     提取 → context/Context（供后续用例引用）
 ```
+
+**两条路径，一个执行器**：单接口用 pytest 参数化展开成 N 个节点，场景用 `ScenarioRunner` 收成 1 个节点。两者最终都调 `CaseRunner.run(case)` —— **它永远只跑一条，不认识"列表"、也不认识"场景"**。循环策略归调用方，执行能力归 `CaseRunner`。
 
 | 模块 | 文件 | 职责 | 状态 |
 |---|---|---|---|
 | reader | `framework/reader/read_yaml.py` | 读文件 → dict | ✅ |
-| model | `framework/model/case_model.py` | 封装 | ✅ |
+| model | `framework/model/case_model.py` | 封装（一个接口的用例集） | ✅ |
+| model | `framework/model/scenario_model.py` | 场景解析（list → list[CaseModel]） | ✅ |
 | adapter | `framework/adapter/execute_case.py` | 适配（→ pytest.param） | ✅ |
-| runner | `framework/runner/case_runner.py` | 编排单条用例 | ✅ |
+| runner | `framework/runner/case_runner.py` | 编排单条用例（不认识"列表/场景"） | ✅ |
+| runner | `framework/runner/scenario_runner.py` | 场景编排（顺序 + 步骤日志，内部调 CaseRunner） | ✅ |
 | handler | `framework/handler/request_handler.py` | 发送请求 | ✅ |
 | handler | `framework/handler/validation_handler.py` | 校验 | ✅ |
 | handler | `framework/handler/extract_handler.py` | 提取（jsonpath → 变量池） | ✅ |
@@ -110,7 +126,8 @@ runner/CaseRunner.run(case)   编排，四步
 | `testcase/` | 测试用例（`test_login.py` / `test_user.py`）；`testcase/test_/` 是老用例备份，**pytest 不收**（`norecursedirs`） |
 | `framework/` | 框架本体（见上表），只放活代码 |
 | `tests/` | **框架自身的单测**。不在 `testpaths` 里，要显式 `pytest tests/` |
-| `data/` | 测试数据 yaml（`login_cases.yaml` / `add_user_cases.yaml`） |
+| `data/` | 单接口测试数据 yaml（一个接口一个文件，`base_info` + `test_cases`） |
+| `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序执行） |
 | `docs/` | 设计文档 + 代码规范 |
 | `archive/` | 归档：旧链路参考代码 + 被取代的旧设计文档 |
 | `config/` | 配置（空，待做） |
@@ -143,7 +160,10 @@ runner/CaseRunner.run(case)   编排，四步
 | 5 | 目录语义梳理（constants / contracts / infra / exception） | ✅ |
 | 6 | 依赖注入：`HttpClient` 由 session 级 fixture 注入，修掉 session 泄漏 | ✅ |
 | 7 | 接口关联：`context/` 变量池 + `${}` 占位符 + `extract_handler`；日志增强（分段 / 脱敏 / 带栈） | ✅ |
-| 8 | config 收敛（base_url / 账号 / 超时 现硬编码在 conftest） | ⬜ **下一步** |
+| 8 | 参数位置自适应：`RequestHandler` 按 method + Content-Type 翻译成 params / json / data | ✅ |
+| 9 | 单接口铺开：8 个接口 28 条用例（用户组 5 + 电商组 3） | ✅ |
+| 10 | **业务场景**：`ScenarioModel` + `ScenarioRunner`，电商下单全链路跑通 | ✅ |
+| 11 | config 收敛（账号 / 超时 现硬编码在 conftest） | ⬜ **下一步** |
 
 ---
 
@@ -266,3 +286,40 @@ data:
 - 整个值恰好是一个占位符时**保留原类型**（`${count}` 取到 int 就是 int），混排在字符串里则拼接。
 - 函数市场在 `framework/context/functions.py`，加函数 = 写函数 + 挂 `@register`，框架别处不用改。
 - **跨接口关联要写 fixture**（见 `conftest.py` 的 `login`）—— 靠用例执行顺序不可靠，原因见坑 ⑩。
+
+---
+
+## 业务场景怎么用（阶段 10 产物）
+
+单接口 yaml 根节点是 **dict**；**场景 yaml 根节点是列表**，每个元素是一个「单接口形态」的块，**顺序即执行顺序**：
+
+```yaml
+# data/scenarios/xxx.yaml
+- base_info: { api_name: 登录, url: /coupApply/cms/login_dw, method: POST, headers: {…} }
+  test_cases:
+    - case_name: 登录
+      data: { username: test123, password: qwe666 }
+      extract: { user_token: $.data.user_token }     # 提取给后面用
+- base_info: { api_name: 商品列表, url: /coupApply/cms/goodsList, method: GET, headers: {…} }
+  test_cases:
+    - case_name: 获取商品列表
+      data: { msgType: getHandsetListOfCust, page: 1, size: 20 }
+      extract: { goods_id: $.goodsList[0].goodsId }
+- # … 后续步骤引用 ${goods_id}
+```
+
+对应的 testcase 就是**一个函数**（一个场景 = 一个 pytest 节点）：
+
+```python
+class TestEcommerceFlow:
+    def test_ecommerce_flow(self, client, context):
+        ScenarioRunner(client, context).run(ScenarioModel('/data/scenarios/ecommerce_flow.yaml'))
+```
+
+- **顺序由数据控制**（yaml 列表顺序），**不靠 pytest 收集顺序** —— 这是和单接口最大的区别。
+- **步骤间传值靠变量池**（`${user_token}` / `${goods_id}`），同一套机制，没有第二套。
+- **不需要 `login` fixture** —— 顺序天然成立，「前置」就是第一步。
+- **失败定位**：报错里带 `步骤=3/5 商品详情`（`ScenarioRunner` 补的上下文），一眼看出断在哪步。
+- **代价**：`-k` / `-m` / 重跑只能按**场景粒度**，筛不到单个 step。
+
+**为什么复用 `CaseModel`**：场景的一个 step = 单接口 yaml 的完整形态，所以 `ScenarioModel` 直接拿 `CaseModel` 解析每个元素（`CaseModel.from_dict`）——「组合」而不是「另造一套」。同理 `ScenarioRunner` 内部调 `CaseRunner`，不重写四步。

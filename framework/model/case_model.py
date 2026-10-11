@@ -25,15 +25,33 @@ class CaseModel:
     """统一数据模型：把散乱数据源（yaml/json/...）的数据，封装成一个规范结构。
 
     只负责「封装」，不做适配 —— 适配（-> pytest 等）交给 ExecuteCase。
+
+    一个实例 = **一个接口 + 它的若干条用例**。
     """
 
     def __init__(self, file_path: str) -> None:
         self.api = None
         self.cases = []
-        self.case_to_model(file_path)
+        self.parse(YamlRead.read(file_path))
 
-    def case_to_model(self, file_path: str) -> None:
-        data = YamlRead.read(file_path)
+    @classmethod
+    def from_dict(cls, data: dict) -> "CaseModel":
+        """从已经读进来的 dict 构造。
+
+        给场景层用：场景 yaml 的每个元素就是「单接口形态」的 dict，
+        直接交给这个解析器，不重复实现一套。
+        """
+        model = cls.__new__(cls)  # 跳过 __init__：它要文件路径，而这里已经有数据了
+        model.api = None
+        model.cases = []
+        model.parse(data)
+        return model
+
+    def parse(self, data: dict) -> None:
+        """把「一个接口的 dict」（base_info + test_cases）解析成 ApiCase + list[TestCase]。
+
+        独立成方法是为了让场景层能复用 —— 场景的每个 step 就是这样一个 dict。
+        """
         try:
             base_info = data['base_info']
             test_cases = data['test_cases']
@@ -66,4 +84,3 @@ class CaseModel:
         if not isinstance(extracts, dict):
             raise CaseParseError(f"extract 必须是 键值对: {extracts!r}")
         return extracts
-

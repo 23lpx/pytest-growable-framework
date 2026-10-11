@@ -1,11 +1,18 @@
 from requests import Response
 
 from framework.client.http_client import HttpClient
+from framework.constants.http import Header, HttpMethod, HttpParam
 from framework.contracts import CaseLike
 
 
 class RequestHandler:
     """发送请求这一步：把 case 的 method/url/headers/data 交给 HttpClient 发出去。
+
+    **参数位置推断在这个类里做，不在 HttpClient**：
+      case.data 是「位置未定」的抽象参数，翻译成 requests 的具体参数位
+      （params / json / data）属于适配层的事。HttpClient 是通用底座，只认
+      「发什么」，不该知道「为什么这么发」—— 一旦它去判断 Content-Type，
+      就认识了业务约定，通用性就没了（决策归适配层，执行归底座）。
 
     只干「发」这一件事 —— 它不认识 yaml、不做断言。
 
@@ -23,5 +30,25 @@ class RequestHandler:
             method=case.method,
             path=case.url,
             headers=case.headers,
-            data=case.data,
+            **self._pick_param_slot(case),
         )
+
+    @staticmethod
+    def _pick_param_slot(case: CaseLike) -> dict:
+        """把 case.data 翻译成 requests 的参数位置。
+
+        规则（按 HTTP 常识，写用例的人不用操心参数该放哪）：
+          - GET / DELETE → 查询串 params
+          - POST / PUT   → Content-Type 含 json 就发 json body，否则当表单 data
+
+        暂不支持 files（文件上传）—— 目前没有这类接口，等真有再加分支，
+        别为不存在的需求写代码。
+        """
+        if case.method.upper() in HttpMethod.QUERY_METHODS:
+            return {HttpParam.PARAMS: case.data}
+
+        content_type = case.headers.get(Header.CONTENT_TYPE, "")
+        if HttpParam.JSON in content_type.lower():
+            return {HttpParam.JSON: case.data}
+
+        return {HttpParam.DATA: case.data}

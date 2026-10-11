@@ -56,30 +56,42 @@ git checkout develop                    # 切回来继续
 
 ```
 data/*.yaml
-   │  reader/YamlRead.read                    读文件 → dict
-   ▼
-model/CaseModel                              封装：dict → 统一模型 {api, cases[]}
    │
-   ▼
-adapter/ExecuteCase.from_model               适配：模型 → 执行器契约（一条 = 一个 pytest 节点）
+   ├─ 单接口（dict：base_info + test_cases）
+   │     │  reader/YamlRead.read                 读文件 → dict
+   │     ▼
+   │   model/CaseModel                           封装：dict → 统一模型 {api, cases[]}
+   │     │
+   │     ▼
+   │   adapter/ExecuteCase.from_model            适配：模型 → 执行器契约（一条 = 一个执行单元）
+   │     │
+   │     ▼
+   │   pytest 参数化                              ← 多 case 调度权在 pytest 手里
+   │     每条 case 一个节点（保住 -k / -m / 重跑 / -n）
    │
-   ▼
-pytest 参数化                                 ← 多 case 调度权在 pytest 手里
-   │  一次一条 case
-   ▼
-runner/CaseRunner.run(case)                  编排，四步
-   ├── context/replacer.resolve_case    解析 ${...} → 产出**副本**（绝不改原 case）
-   ├── handler/RequestHandler  → client/HttpClient → 被测接口
-   ├── handler/ValidationHandler        校验（fail-fast：不过就不写变量池）
-   └── handler/ExtractHandler           提取 → context/Context（供后续用例引用）
+   └─ 场景（list：N 个接口块，**顺序即执行顺序**）
+         │  reader/YamlRead.read
+         ▼
+       model/ScenarioModel                     = list[CaseModel]（复用单接口解析器，只是拼积木）
+         │
+         ▼
+       runner/ScenarioRunner                    顺序编排 + 步骤日志（整个场景 = 一个节点）
+         │  ── 逐步调用 ──┐
+         └────────────────┴──▶  runner/CaseRunner.run(case)   编排，四步  ← 两条路径在此汇合
+                                  ├── context/replacer.resolve_case    解析 ${...} → 产出**副本**（绝不改原 case）
+                                  ├── handler/RequestHandler  → client/HttpClient → 被测接口
+                                  ├── handler/ValidationHandler        校验（fail-fast：不过就不写变量池）
+                                  └── handler/ExtractHandler           提取 → context/Context（供后续用例引用）
 ```
 
 | 目录 / 文件 | 职责 |
 |---|---|
 | `framework/reader/read_yaml.py` | 读文件 → dict。抛 `YamlReadError` |
-| `framework/model/case_model.py` | 封装。`ApiCase` / `TestCase` / `CaseModel`。抛 `CaseParseError` |
+| `framework/model/case_model.py` | 封装。`ApiCase` / `TestCase` / `CaseModel`（一个接口 + 它的用例）。抛 `CaseParseError`。`from_dict()` 供场景层复用 |
+| `framework/model/scenario_model.py` | 场景解析。根节点 list → `list[CaseModel]`。**只解析，不编排** |
 | `framework/adapter/execute_case.py` | 适配。`ExecuteCase` 带接口级+用例级信息，`from_model()` / `to_pytest_param()` |
-| `framework/runner/case_runner.py` | 只做编排：解析占位符 → 发送 → 校验 → 提取。不循环、不管生命周期 |
+| `framework/runner/case_runner.py` | 只做编排：解析占位符 → 发送 → 校验 → 提取。**不循环、不管生命周期、不认识"列表/场景"** |
+| `framework/runner/scenario_runner.py` | 场景编排：按 yaml 顺序逐步调 `CaseRunner`；步骤日志；失败补「第 N/M 步」上下文。**不重写四步** |
 | `framework/handler/request_handler.py` | `RequestHandler.send(case)` —— 发请求那一步 |
 | `framework/handler/validation_handler.py` | `ValidationHandler.validate(case, resp)` —— 校验，抛 `ValidationError` |
 | `framework/handler/extract_handler.py` | `ExtractHandler.extract(case, resp, ctx)` —— jsonpath 提取，写进变量池 |
@@ -101,6 +113,10 @@ runner/CaseRunner.run(case)                  编排，四步
 **占位符替换必须产副本**：`resolve_case()` 返回 `ResolvedCase`，**绝不就地改原 case** —— `ExecuteCase` 是收集阶段构造、整个 session 共用的（含 `--reruns`），就地改会让第二遍跑到第一遍留下的脏数据。
 
 **跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集（`test_add_user.py` 排在 `test_login.py` 前），"登录先跑"天然不成立。要前置数据就写 `conftest` 的 `login` fixture。
+
+**单接口 vs 场景 = 两种消费方式，一个执行器**：单接口用 pytest 参数化展开成 N 个节点（保住 `-k` / `-m` / 单条重跑）；场景用 `ScenarioRunner` 收成 1 个节点（**顺序由 yaml 列表决定**）。**两条路径最终都调 `CaseRunner.run(case)` —— 它永远只跑一条**。所以「加场景」不需要动 `runner` / `handler` / `client`：循环策略归调用方，执行能力归 `CaseRunner`。场景的每个 step 就是「单接口 yaml 的完整形态」，`ScenarioModel` 直接复用 `CaseModel.from_dict` 解析（**组合，不是继承**）。
+
+**参数位置在 `RequestHandler` 决定，不在 `HttpClient`**：`case.data` 是「位置未定」的抽象参数，由 `RequestHandler` 按 method（GET/DELETE → params）+ Content-Type（含 json → json body，否则表单）翻译成 requests 的具体参数位。`HttpClient` 是通用底座，**只认"发什么"、不问"为什么这么发"** —— 决策归适配层，执行归底座。
 
 ## 代码规范（硬约束，详见 `docs/代码规范.md`）
 
@@ -148,3 +164,4 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 - 跨用例关联在 `-n` 下失效 → 变量池是进程内的，有依赖的用例集别开 `-n`
 - **日志看不见了** → 两条路查：① logger 不能设 `propagate = False`（会切断 pytest 挂 root 的日志捕获）；② 默认不加 `-s`，日志只在用例失败时以 `Captured log` 形式出现，要看实时就加 `-s`
 - 控制台输出挤成一团 → 检查 `addopts` 里有没有 `-s`（有的话日志会糊在 pytest 那行未结束的用例 id 后面）
+- 场景失败看不出断在第几步 → 报错上下文里有 `步骤=N/M` + 接口名（`ScenarioRunner` 补的）；加 `-s` 还能看到每步的 `--- 步骤 N/M: xxx ---` 日志

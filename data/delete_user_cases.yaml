@@ -1,0 +1,35 @@
+base_info:
+  api_name: 删除用户
+  url: '/dar/user/deleteUser'
+  method: POST
+  headers:
+    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+
+# 实测：本接口只看 user_id，**不需要 token**。缺 user_id 时也返回 200（不是 HTTP 错误），
+# 靠响应体的 msg_code 区分成败 —— 所以断言必须落在响应体上。
+test_cases:
+  - case_name: 删除用户成功
+    data:
+      user_id: 123839387391912
+    validation:
+      - contains:
+          msg: 删除成功!
+      - contains:
+          msg_code: 200
+
+  - case_name: 缺少必填参数 user_id
+    data: {}
+    validation:
+      - contains:
+          msg: 删除失败，用户id不存在!
+      - contains:
+          msg_code: 9001
+
+  - case_name: user_id 为空串
+    data:
+      user_id: ''
+    validation:
+      - contains:
+          msg: 删除失败，用户id不存在!
+      - contains:
+          msg_code: 9001

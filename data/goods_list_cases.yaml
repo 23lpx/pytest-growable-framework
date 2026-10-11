@@ -1,0 +1,27 @@
+base_info:
+  api_name: 商品列表
+  url: '/coupApply/cms/goodsList'
+  method: GET
+  headers:
+    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+
+# GET 请求：data 里的键值对会被 RequestHandler 翻译成查询串 params。
+# 实测不需要 token（header 里带了也不校验），所以这一步不写 token。
+test_cases:
+  - case_name: 获取商品列表
+    data:
+      msgType: getHandsetListOfCust
+      page: 1
+      size: 20
+    validation:
+      - contains:
+          error_code: '0000'
+
+  - case_name: 分页取第二页
+    data:
+      msgType: getHandsetListOfCust
+      page: 2
+      size: 20
+    validation:
+      - contains:
+          error_code: '0000'

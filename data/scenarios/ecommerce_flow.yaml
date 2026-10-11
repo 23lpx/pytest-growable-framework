@@ -1,0 +1,109 @@
+# 电商下单全链路：登录 → 商品列表 → 商品详情 → 提交订单 → 订单支付
+#
+# 根节点是**列表**，每个元素是一个「单接口形态」的块，**顺序就是执行顺序**。
+# 步骤之间靠变量池传递（${xxx}）：
+#   登录 → user_token
+#   商品列表 → goods_id
+#   提交订单 → order_number / order_user_id
+#
+- base_info:
+    api_name: 电网系统登录
+    url: '/coupApply/cms/login_dw'
+    method: POST
+    headers:
+      'Content-Type': 'application/json;charset=UTF-8'
+  test_cases:
+    - case_name: 登录
+      data:
+        username: test123
+        password: qwe666
+      validation:
+        - contains:
+            msg: 调用成功
+        - contains:
+            code: 0
+      extract:
+        user_token: $.data.user_token
+
+- base_info:
+    api_name: 商品列表
+    url: '/coupApply/cms/goodsList'
+    method: GET
+    headers:
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+  test_cases:
+    - case_name: 获取商品列表
+      data:
+        msgType: getHandsetListOfCust
+        page: 1
+        size: 20
+      validation:
+        - contains:
+            error_code: '0000'
+      # 取列表第一个商品，供后面两步引用
+      extract:
+        goods_id: $.goodsList[0].goodsId
+
+- base_info:
+    api_name: 商品详情
+    url: '/coupApply/cms/productDetail'
+    method: POST
+    headers:
+      'Content-Type': 'application/json;charset=UTF-8'
+  test_cases:
+    - case_name: 获取商品详情
+      data:
+        pro_id: "${goods_id}"        # ← 上一步提取出来的
+        page: 1
+        size: 20
+      validation:
+        - contains:
+            error_code: '0000'
+
+- base_info:
+    api_name: 提交订单
+    url: '/coupApply/cms/placeAnOrder'
+    method: POST
+    headers:
+      'Content-Type': 'application/json;charset=UTF-8'
+  test_cases:
+    - case_name: 提交订单
+      data:
+        goods_id: "${goods_id}"
+        number: 2
+        propertyChildIds: '2:9'
+        inviter_id: '127839112'
+        price: '128'
+        freight_insurance: '0.0'
+        discount_code: '002399'
+        # 嵌套对象：replacer 会递归处理，直接写成 yaml 嵌套最自然
+        consignee_info:
+          name: 张三
+          phone: 13800000000
+          address: 北京市海淀区西三环北路74号院4栋3单元1008
+      validation:
+        - contains:
+            message: 提交订单成功
+        - contains:
+            error_code: '0000'
+      extract:
+        order_number: $.orderNumber
+        order_user_id: $.userId
+
+- base_info:
+    api_name: 订单支付
+    url: '/coupApply/cms/orderPay'
+    method: POST
+    headers:
+      'Content-Type': 'application/json;charset=UTF-8'
+  test_cases:
+    - case_name: 订单支付
+      data:
+        orderNumber: "${order_number}"
+        userId: "${order_user_id}"
+        timeStamp: "${timestamp()}"
+      validation:
+        - contains:
+            message: 订单支付成功
+        - contains:
+            error_code: '0000'
