@@ -1,8 +1,8 @@
 import pytest
 
-from framework.config import Config
-from framework.context.context import Context
-from framework.exception.errors import ConfigError, ContextError
+from pytest_framework.adapters.config import Config
+from pytest_framework.entities.context.context import Context
+from pytest_framework.entities.exception.errors import ConfigError, ContextError
 
 RAW = {
     "base_url": "http://127.0.0.1:8787",

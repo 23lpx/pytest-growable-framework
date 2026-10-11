@@ -2,8 +2,8 @@ from typing import Any, Callable
 
 import pytest
 
-from framework.exception.errors import ValidationError
-from framework.handler.validation_handler import ValidationHandler
+from pytest_framework.entities.exception.errors import ValidationError
+from pytest_framework.adapters.validation import ValidationHandler
 
 
 class FakeCase:

@@ -55,40 +55,54 @@ Python 3.12，venv 在 `.venv/`。
 
 ## 框架（当前状态）
 
-自研框架，按「数据 → 模型 → 适配 → pytest → runner」**单向分层**。
+自研框架，**src-layout + 按架构层分目录**（目录名自己就说明了分层）。
+
+```
+src/pytest_framework/
+├── entities/         ← 最内：零第三方依赖；模型 / 变量池 / 契约 / 异常 / 常量
+├── ports/            ← 端口：内层定契约、外层实现（sender / context_store）
+├── usecases/         ← 编排：case_runner / scenario_runner
+├── adapters/         ← 适配：request / validation / extract / execute_case / reader / config
+└── infrastructure/   ← 最外：http(requests) / logging / report(allure) / path
+        ↑ 依赖方向一路向内：infrastructure → adapters → usecases → ports → entities
+```
+
+数据流（两条路径最终汇合到同一个执行器）：
 
 ```
 data/api/*.yaml         ← 单接口（dict：base_info + test_cases）
 data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行顺序**）
    │
    ├─ 单接口 ── CaseModel.discover() 扫目录
-   │     │  reader/YamlRead.read
+   │     │  adapters/reader.YamlRead.read
    │     ▼
-   │   model/CaseModel            封装：dict → 统一模型 {api, cases[]}
+   │   entities/CaseModel         封装：dict → 统一模型 {api, cases[]}
    │     │
    │     ▼
-   │   adapter/ExecuteCase        适配：模型 → 执行器契约（一条 = 一个执行单元）
+   │   adapters/ExecuteCase       适配：模型 → 执行器契约（一条 = 一个执行单元）
    │     │  ExecuteCase.discover() **展平**
    │     ▼
    │   pytest 参数化               ← 多 case 调度权在 pytest 手里
    │     每条 case 一个节点（保住 -k / -m / 重跑 / -n 的粒度）
    │
    └─ 场景 ── ScenarioModel.discover() 扫目录（**不展平**）
-         │  reader/YamlRead.read
+         │  adapters/reader.YamlRead.read
          ▼
-       model/ScenarioModel       = list[CaseModel]，**复用**单接口解析器（只是拼积木）
+       entities/ScenarioModel      = list[CaseModel]，**复用**单接口解析器（只是拼积木）
          │
          ▼
-       runner/ScenarioRunner      顺序编排 + 步骤日志（整个场景 = 一个节点）
+       usecases/ScenarioRunner     顺序编排 + 步骤日志（整个场景 = 一个节点）
          │
          └────────────┐
                       ▼
-        runner/CaseRunner.run(case)   ← 两条路径在此汇合，只跑「一条」
-          ├── context/replacer.resolve_case   解析 ${...} → 产出副本（不改原 case）
-          ├── handler/RequestHandler     → client/HttpClient → 被测接口
-          ├── handler/ValidationHandler  校验（fail-fast：不过就不写变量池）
-          └── handler/ExtractHandler     提取 → context/Context（供后续用例引用）
+        usecases/CaseRunner.run(case)   ← 两条路径在此汇合，只跑「一条」
+          ├── entities/context/replacer.resolve_case  解析 ${...} → 产出副本（不改原 case）
+          ├── adapters/RequestHandler   依赖 ports/Sender ← infrastructure/HttpClient
+          ├── adapters/ValidationHandler  校验（fail-fast：不过就不写变量池）
+          └── adapters/ExtractHandler     提取 → entities/Context（供后续用例引用）
 ```
+
+**怎么找到包**：两次保险 —— `pytest.ini` 的 `pythonpath = src`（clone 下来直接跑）+ `pyproject.toml`（`pip install -e .` 后任何地方都能 import）。
 
 **数据驱动（两种发现，同一个模式）**：
 
@@ -97,39 +111,41 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | 单接口 | `CaseModel.discover()` → `ExecuteCase.discover()` | ✅ 展平 | **一条 case 一个节点** | 数据驱动**主力**（量大、独立） |
 | 场景 | `ScenarioModel.discover()` | ❌ 不展平 | **一个场景一个节点** | 只做**简单线性**流程 |
 
-**加数据文件 = 加用例，代码一个字不改** —— `testcase/` 里只有两个文件：`test_api.py`（所有单接口）+ `test_scenario.py`（所有场景）。粒度差别就在「要不要展平」这一处。
+**加数据文件 = 加用例，代码一个字不改** —— `cases/` 里只有两个文件：`test_api.py`（所有单接口）+ `test_scenario.py`（所有场景）。粒度差别就在「要不要展平」这一处。
 
 **两条路径，一个执行器**：单接口用 pytest 参数化展开成 N 个节点，场景用 `ScenarioRunner` 收成 1 个节点。两者最终都调 `CaseRunner.run(case)` —— **它永远只跑一条，不认识"列表"、也不认识"场景"**。循环策略归调用方，执行能力归 `CaseRunner`。
 
-| 模块 | 文件 | 职责 | 状态 |
-|---|---|---|---|
-| reader | `framework/reader/read_yaml.py` | 读文件 → dict | ✅ |
-| model | `framework/model/case_model.py` | 封装（一个接口的用例集）+ `discover()` 扫目录 | ✅ |
-| model | `framework/model/scenario_model.py` | 场景解析（list → list[CaseModel]）+ `discover()` 扫目录 | ✅ |
-| adapter | `framework/adapter/execute_case.py` | 适配（模型 → 执行单元）+ `discover()` 展平。**不 import pytest** | ✅ |
-| runner | `framework/runner/case_runner.py` | 编排单条用例（不认识"列表/场景"） | ✅ |
-| runner | `framework/runner/scenario_runner.py` | 场景编排（顺序 + 步骤日志，内部调 CaseRunner） | ✅ |
-| handler | `framework/handler/request_handler.py` | 发送请求 | ✅ |
-| handler | `framework/handler/validation_handler.py` | 校验 | ✅ |
-| handler | `framework/handler/extract_handler.py` | 提取（jsonpath → 变量池） | ✅ |
-| client | `framework/client/http_client.py` | 通用 HTTP 底座 | ✅ |
-| context | `framework/context/` | 变量池 / 占位符解析 / 函数市场 | ✅ |
-| exception | `framework/exception/` | 异常体系 | ✅ |
-| constants | `framework/constants/` | 常量（魔法值收口） | ✅ |
-| contracts | `framework/contracts.py` | 跨层契约（Protocol）：`CaseLike` / `ResponseLike` / `Sender` / `VariableSource` | ✅ |
-| infra | `framework/infra/` | 日志（**含脱敏**）/ 路径 / **报告**（allure 薄封装） | ✅ |
-| tests | `tests/` | 框架自身的单测（不依赖被测服务） | ✅ |
-| config | `framework/config.py` | 配置加载（yaml + 环境变量覆盖），可当 `Context` 的父级 | ✅ |
+| 层 | 文件 | 职责 |
+|---|---|---|
+| **entities** | `entities/model/` | 用例模型（`CaseModel` / `ScenarioModel`）+ `discover()` 扫目录 |
+| | `entities/context/` | 变量池 / 占位符解析 / 函数市场 |
+| | `entities/contracts.py` | 契约：`CaseLike`（用例形状）/ `ResponseLike`（响应形状）/ `VariableSource`（能按路径取值） |
+| | `entities/exception/` | 异常体系 |
+| | `entities/constants/` | 常量（魔法值收口） |
+| **ports** | `ports/sender.py` | `Sender` —— 发请求的端口，`HttpClient` 实现 |
+| **usecases** | `usecases/case_runner.py` | 编排单条用例（不认识"列表/场景"） |
+| | `usecases/scenario_runner.py` | 场景编排（顺序 + 步骤日志，内部调 CaseRunner） |
+| **adapters** | `adapters/execute_case.py` | 适配（模型 → 执行单元）+ `discover()` 展平。**不 import pytest** |
+| | `adapters/request.py` | 发送请求（依赖 `Sender` 端口，**不 import requests / HttpClient**） |
+| | `adapters/validation.py` | 校验 |
+| | `adapters/extract.py` | 提取（jsonpath → 变量池） |
+| | `adapters/reader.py` | 读 yaml → dict |
+| | `adapters/config.py` | 配置加载（yaml + 环境变量覆盖），可当 `Context` 的父级 |
+| **infra** | `infrastructure/http.py` | HTTP 底座（**不认识测试概念**） |
+| | `infrastructure/logging/` | 日志（**含脱敏**） |
+| | `infrastructure/report.py` | allure 薄封装（框架唯一认识 allure 的地方） |
+| | `infrastructure/path.py` | `_project_root()` |
+| — | `tests/` | 框架自身的单测（不依赖被测服务） |
 
 **资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`Context`（变量池）由 `context` fixture（**session 级**，跨用例关联必须共享）提供。`CaseRunner` / `RequestHandler` 只收不 new。整轮测试共用 1 条连接（不是每条用例一条）。
 
-**依赖倒置：内层只认端口，不认实现** —— `handler` / `runner` 依赖 `contracts.Sender`（端口）+ `contracts.ResponseLike`（响应契约），**不 import `client.HttpClient`、也不 import `requests`**；`adapter` **不 import pytest**。全仓**只有 `conftest` 知道 `HttpClient` 存在**。判据：**内层模块的 import 里有没有出现具体库或外层类**。
+**依赖倒置：内层只认端口，不认实现** —— `adapters` / `usecases` 依赖 `ports.Sender`（端口）+ `entities.contracts.ResponseLike`（响应契约），**不 import `infrastructure.HttpClient`、也不 import `requests`**；`adapters` **不 import pytest**。全仓**只有 `conftest` 知道 `HttpClient` 存在**。判据：**内层模块的 import 里有没有出现具体库或外层类**。
 
 **配置当变量池的父级**：`context` fixture 建的是 `Context(parent=config)` —— `${...}` 因此只有**一个入口**：`${token}` 查变量层（运行时提取的），`${login.username}` 落到配置层（`config/config.yaml`）。**配置层只读**：用例 `set` 同名 key 只写自己那层，覆盖不了配置。`Context` 只认 `VariableSource` 契约，**不认识 `Config`** —— 换任何别的来源都行。
 
 **占位符替换必须产副本**：`resolve_case()` 返回 `ResolvedCase`，**绝不就地改原 case** —— `ExecuteCase` 是收集阶段构造、整个 session 共用的（含 `--reruns`），就地改会让第二遍跑到脏数据。
 
-**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就声明 `conftest` 的 `login` fixture —— `testcase/test_api.py` 给所有单接口用例都挂上了（session 级只登一次，零成本，不用再按文件声明）。
+**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就声明 `conftest` 的 `login` fixture —— `cases/test_api.py` 给所有单接口用例都挂上了（session 级只登一次，零成本，不用再按文件声明）。
 
 **文档**：`docs/代码规范.md`（写代码前看）、`docs/架构审查.md`（分层基线 + 依赖判据，加东西前对照）、`docs/interface_test_framework_design_v2.md`、`docs/framework_exception_design_methodology.md`、`docs/修改方案.txt`
 
@@ -139,19 +155,18 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 
 | 目录 | 干什么 |
 |---|---|
-| `testcase/` | **只有两个文件**：`test_api.py`（收所有单接口）+ `test_scenario.py`（收所有场景）。`testcase/test_/` 是老用例备份，**pytest 不收**（`norecursedirs`） |
-| `framework/` | 框架本体（见上表），只放活代码 |
+| `cases/` | **只有两个文件**：`test_api.py`（收所有单接口）+ `test_scenario.py`（收所有场景）。`cases/test_/` 是老用例备份，**pytest 不收**（`norecursedirs`） |
+| `src/pytest_framework/` | **框架本体**，按架构层分目录：`entities/` `ports/` `usecases/` `adapters/` `infrastructure/` |
 | `tests/` | **框架自身的单测**。不在 `testpaths` 里，要显式 `pytest tests/` |
 | `data/api/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
 | `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序执行）。**加文件 = 加场景** |
-| `docs/` | 设计文档 + 代码规范 |
-| `archive/` | 归档：旧链路参考代码 + 被取代的旧设计文档 |
 | `config/` | **环境配置**：`config.yaml`（base_url / 超时 / 账号）。换环境改这份，用例不用动 |
-| `logs/` | 日志（按天切，**已脱敏**） |
-| `reports/` | 报告产物（allure 原始数据 + 静态 HTML），**不进 git** |
+| `docs/` | 设计文档：代码规范 / 架构审查 / 设计说明 |
+| `conftest.py` | **Composition Root** —— 唯一 `new` 具体实现的地方：`config` / `base_url` / `client` / `context` / `login` fixture + `init_logger()` |
+| `pytest.ini` | pytest 配置（含 `pythonpath = src`） |
+| `pyproject.toml` | 打包声明（src-layout 的包在 `src/` 下）+ 依赖清单 |
+| `logs/` `reports/` | 日志（按天切，**已脱敏**）/ 报告产物，**不进 git** |
 | `tools/` | 本地工具（allure 命令行），**不进 git**。各人自己解压一份 |
-| `conftest.py` | `config` / `base_url` / `client` / `context` / `login` fixture + `init_logger()` |
-| `pytest.ini` | pytest 配置 |
 
 ---
 
@@ -180,16 +195,17 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | 8 | 参数位置自适应：`RequestHandler` 按 method + Content-Type 翻译成 params / json / data | ✅ |
 | 9 | 单接口铺开：8 个接口 28 条用例（用户组 5 + 电商组 3） | ✅ |
 | 10 | **业务场景**：`ScenarioModel` + `ScenarioRunner`，电商下单全链路跑通 | ✅ |
-| 11 | **数据驱动**：两种 `discover()`（单接口展平 / 场景不展平），加文件 = 加用例；`testcase/` 收到 2 个文件 | ✅ |
-| 12 | **配置收敛**：`framework/config.py` + `config/config.yaml`；`Context` 加父级，`${...}` 一套语法同时覆盖配置与变量 | ✅ |
+| 11 | **数据驱动**：两种 `discover()`（单接口展平 / 场景不展平），加文件 = 加用例；`cases/` 收到 2 个文件 | ✅ |
+| 12 | **配置收敛**：`src/pytest_framework/adapters/config.py` + `config/config.yaml`；`Context` 加父级，`${...}` 一套语法同时覆盖配置与变量 | ✅ |
 | 13 | **allure 报告**：场景 → 可视化**嵌套 step**；`environment.properties` 从配置生成 | ✅ |
+| 14 | **目录重构**：src-layout + 按架构层分目录（entities / ports / usecases / adapters / infrastructure）；`testcase/` → `cases/`，删 `archive/` | ✅ |
 
 ---
 
 ## 命令速查
 
 ```bash
-# 跑接口用例（testpaths = testcase）
+# 跑接口用例（testpaths = cases）
 ./.venv/Scripts/python.exe -m pytest
 
 # 换环境：临时指到别的服务地址（优先级：命令行 > 环境变量 > config/config.yaml）
@@ -198,7 +214,7 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 # 敏感值用环境变量注入（APP_ 前缀 + 双下划线分层）
 APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
-# 跑框架自身的单测（不依赖被测服务，改 framework/ 后先跑这个）
+# 跑框架自身的单测（不依赖被测服务，改 src/pytest_framework/ 后先跑这个）
 ./.venv/Scripts/python.exe -m pytest tests/
 
 # 看实时日志（默认日志被 pytest 捕获，只在用例失败时显示；加了 -s 就实时刷屏）
@@ -222,7 +238,7 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 ./.venv/Scripts/python.exe -m pytest -n 2
 
 # 以「模块」方式跑单个文件（file 方式会找不到包）
-./.venv/Scripts/python.exe -m framework.infra.logger
+./.venv/Scripts/python.exe -m pytest_framework.infrastructure.logging.logger
 
 # 出 allure 报告：①出数据 → ②渲染静态 HTML → ③起服务看
 ./.venv/Scripts/python.exe -m pytest --alluredir=reports/allure-results
@@ -268,13 +284,13 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 **④ 控制台 print 中文是乱码，但断言是好的** —— Windows 管道 GBK 的问题。看干净输出：`PYTHONIOENCODING=utf-8`。
 
-**⑤ 写文件别用裸相对路径** —— `open('logs/x')` 跟着 **cwd** 走，换目录跑就写错地方。统一用 `framework/infra/path.py` 的 `_project_root()`。
+**⑤ 写文件别用裸相对路径** —— `open('logs/x')` 跟着 **cwd** 走，换目录跑就写错地方。统一用 `src/pytest_framework/infrastructure/path.py` 的 `_project_root()`。
 
 **⑥ `Path('D:/proj') / '/data/x'` 会顶掉项目根** —— 前导斜杠会让 pathlib 当成绝对路径，结果是 `D:\data\x` 而不是 `D:\proj\data\x`。写 `file_path` 前先 `lstrip("/\\")`。
 
 **⑦ 循环导入** —— `model` 和 `adapter` 互相 import 过一次，直接 `ImportError: partially initialized module`。单向依赖 + 必要时局部 import。
 
-**⑧ pytest 会递归收 `testpaths` 下的目录** —— `testcase/test_/` 这种备份目录也会被收进来，里面 import 断了就整个 `collection error`，**一条都不跑**。已在 `pytest.ini` 用 `norecursedirs = test_` 排除。
+**⑧ pytest 会递归收 `testpaths` 下的目录** —— `cases/test_/` 这种备份目录也会被收进来，里面 import 断了就整个 `collection error`，**一条都不跑**。已在 `pytest.ini` 用 `norecursedirs = test_` 排除。
 
 **⑨ `norecursedirs` 写一个值会把默认值整个顶掉** —— 只写 `test_`，pytest 默认的 `.venv` / `.*` / `*.egg` 就全失效了，`pytest .` 会把三方库自带的测试也收进来。要写就得把默认值补回来：`test_ *.egg .* venv build dist __pycache__`。
 
@@ -320,7 +336,7 @@ data:
 
 - **`${key}`** 变量引用（支持 `a.b.c` 点号路径）；**`${func(args)}`** 函数调用。
 - 整个值恰好是一个占位符时**保留原类型**（`${count}` 取到 int 就是 int），混排在字符串里则拼接。
-- 函数市场在 `framework/context/functions.py`，加函数 = 写函数 + 挂 `@register`，框架别处不用改。
+- 函数市场在 `src/pytest_framework/entities/context/functions.py`，加函数 = 写函数 + 挂 `@register`，框架别处不用改。
 - **跨接口关联要写 fixture**（见 `conftest.py` 的 `login`）—— 靠用例执行顺序不可靠，原因见坑 ⑩。单接口用例现在**统一挂**这个 fixture（session 级只登一次，零成本）。
 
 ---
@@ -344,10 +360,10 @@ data:
 - # … 后续步骤引用 ${goods_id}
 ```
 
-对应的 testcase 就是**一个函数**（一个场景 = 一个 pytest 节点）：
+对应的测试文件里就是**一个函数**（一个场景 = 一个 pytest 节点）：
 
 ```python
-# testcase/test_scenario.py —— 一个函数收掉**所有**场景
+# cases/test_scenario.py —— 一个函数收掉**所有**场景
 class TestScenario:
     @pytest.mark.parametrize("scenario", ScenarioModel.discover(), ids=lambda s: s.name)
     def test_scenario(self, scenario, client, context):
@@ -407,7 +423,7 @@ APP_LOGIN__PASSWORD=real_pwd ./.venv/Scripts/python.exe -m pytest
   否则 `"30"` 会一路传进 requests。
 - 这份配置**故意提交进 git**（本地 demo 服务、账号是假的，clone 即跑更要紧）。
   **真实项目里它该进 `.gitignore`**，敏感值只走环境变量 / CI secrets。
-- 实现 `framework/config.py`：内部就是一个 `Context`，所以能直接当变量池的**父级**。
+- 实现 `src/pytest_framework/adapters/config.py`：内部就是一个 `Context`，所以能直接当变量池的**父级**。
   `Context` 只认 `VariableSource` 契约，不认识 `Config` —— 将来换成数据库 / 配置中心，`Context` 一个字不用改。
 
 ---
@@ -435,13 +451,13 @@ allure 分两步：**pytest 出原始数据** → **allure 命令行渲染成页
 
 | 位置 | 内容 | 来自 |
 |---|---|---|
-| Behaviors | 按 `feature` / `story` 分组：`单接口` → 各接口；`业务场景` → 各场景 | `testcase/*.py` 的 `@allure.feature` + `allure.dynamic.story` |
+| Behaviors | 按 `feature` / `story` 分组：`单接口` → 各接口；`业务场景` → 各场景 | `cases/*.py` 的 `@allure.feature` + `allure.dynamic.story` |
 | 用例详情 | 场景的 **5 个嵌套 step**（登录→列表→详情→下单→支付），一眼看出断在哪步 | `ScenarioRunner` 的 `report.step()` |
 | Environment | `base_url` / `timeout` / 账号 / Python 版本 | `conftest` 的 `_allure_environment`（从 `config` 生成） |
 
 **两个设计点**：
 
-1. **框架不直接 `import allure`** —— 走 `framework/infra/report.py` 的 `step()` 薄封装。
+1. **框架不直接 `import allure`** —— 走 `src/pytest_framework/infrastructure/report.py` 的 `step()` 薄封装。
    这是框架核心**第一次依赖外部工具**，把耦合收在一个文件里，将来换 pytest-html 只改这里。
 2. **密码绝不进报告** —— `environment.properties` 只写非敏感项；报告是要发给别人看的。
 

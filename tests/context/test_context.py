@@ -2,8 +2,8 @@ from typing import Any
 
 import pytest
 
-from framework.context.context import Context
-from framework.exception.errors import ContextError
+from pytest_framework.entities.context.context import Context
+from pytest_framework.entities.exception.errors import ContextError
 
 
 class TestContext:

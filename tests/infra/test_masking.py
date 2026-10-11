@@ -1,5 +1,5 @@
-from framework.constants.logging import MaskConfig
-from framework.infra.masking import mask, mask_text
+from pytest_framework.entities.constants.logging import MaskConfig
+from pytest_framework.infrastructure.logging.masking import mask, mask_text
 
 
 class TestMask:

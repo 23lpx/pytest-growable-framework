@@ -2,8 +2,8 @@ import re
 
 import pytest
 
-from framework.context.functions import FUNCTIONS, call, register
-from framework.exception.errors import ContextError
+from pytest_framework.entities.context.functions import FUNCTIONS, call, register
+from pytest_framework.entities.exception.errors import ContextError
 
 
 class TestFunctions:

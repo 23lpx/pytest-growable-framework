@@ -2,9 +2,9 @@ from typing import Any, Callable
 
 import pytest
 
-from framework.context.context import Context
-from framework.exception.errors import ExtractError
-from framework.handler.extract_handler import ExtractHandler
+from pytest_framework.entities.context.context import Context
+from pytest_framework.entities.exception.errors import ExtractError
+from pytest_framework.adapters.extract import ExtractHandler
 
 
 class FakeCase:

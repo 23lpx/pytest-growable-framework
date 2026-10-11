@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytest-framework"
+version = "0.1.0"
+description = "数据驱动的接口自动化测试框架（自研）—— 一个执行框架，多份测试数据"
+requires-python = ">=3.12"
+
+dependencies = [
+    "requests",
+    "pyyaml",
+    "jsonpath",
+]
+
+[project.optional-dependencies]
+# 开发/测试才需要的：跑用例、出报告、看日志树
+dev = [
+    "pytest",
+    "pytest-rerunfailures",
+    "pytest-xdist",
+    "allure-pytest",
+    "logging-tree",
+]
+
+[tool.setuptools.packages.find]
+# src-layout：包在 src/ 下，不是项目根
+where = ["src"]

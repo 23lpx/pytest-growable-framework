@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 
-from framework.adapter.execute_case import ExecuteCase
-from framework.context.context import Context
-from framework.exception.errors import ValidationError
-from framework.runner.case_runner import CaseRunner
+from pytest_framework.adapters.execute_case import ExecuteCase
+from pytest_framework.entities.context.context import Context
+from pytest_framework.entities.exception.errors import ValidationError
+from pytest_framework.usecases.case_runner import CaseRunner
 
 
 class FakeSender:

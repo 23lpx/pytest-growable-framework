@@ -1,9 +1,9 @@
 import pytest
 
-from framework.context.context import Context
-from framework.context.functions import register
-from framework.context.replacer import resolve_str, resolve_value
-from framework.exception.errors import ContextError
+from pytest_framework.entities.context.context import Context
+from pytest_framework.entities.context.functions import register
+from pytest_framework.entities.context.replacer import resolve_str, resolve_value
+from pytest_framework.entities.exception.errors import ContextError
 
 
 @pytest.fixture

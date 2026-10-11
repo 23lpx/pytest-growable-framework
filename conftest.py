@@ -4,14 +4,14 @@ from typing import Iterator
 
 import pytest
 
-from framework.adapter.execute_case import ExecuteCase
-from framework.client.http_client import HttpClient
-from framework.config import Config
-from framework.context.context import Context
-from framework.infra.logger import init_logger
-from framework.infra.path import _project_root
-from framework.model.case_model import CaseModel
-from framework.runner.case_runner import CaseRunner
+from pytest_framework.adapters.execute_case import ExecuteCase
+from pytest_framework.infrastructure.http import HttpClient
+from pytest_framework.adapters.config import Config
+from pytest_framework.entities.context.context import Context
+from pytest_framework.infrastructure.logging.logger import init_logger
+from pytest_framework.infrastructure.path import _project_root
+from pytest_framework.entities.model.case_model import CaseModel
+from pytest_framework.usecases.case_runner import CaseRunner
 
 init_logger()
 
