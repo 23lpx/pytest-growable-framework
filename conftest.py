@@ -11,7 +11,7 @@ from framework.runner.case_runner import CaseRunner
 
 init_logger()
 
-LOGIN_CASES = '/data/login_cases.yaml'
+LOGIN_CASES = '/data/api/login_cases.yaml'
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

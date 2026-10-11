@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from framework.exception.errors import CaseParseError
+from framework.infra.path import _project_root
 from framework.model.case_model import CaseModel
 from framework.reader.read_yaml import YamlRead
 
@@ -28,3 +29,19 @@ class ScenarioModel:
                 f"场景 yaml 的根节点必须是列表（若干个接口块），实际是 {type(raw).__name__}: {file_path}"
             )
         self.steps = [CaseModel.from_dict(item) for item in raw]
+
+    @classmethod
+    def discover(cls, dir_path: str = "data/scenarios") -> "list[ScenarioModel]":
+        """扫描目录下所有场景 yaml —— **加一个文件就多一个场景用例，不用碰代码**。
+
+        路径给「相对项目根」的形式，交给 YamlRead 统一拼接（它内部会 lstrip 掉前导斜杠）。
+
+        ⚠️ 这个方法在**收集阶段**执行（模块导入时就被 pytest 求值）：
+        某个 yaml 坏了会让**整个测试文件** collection error —— pytest 的收集是
+        「全有全无」。这是数据驱动的固有代价，先接受；等数据规模上来，
+        再上 schema 校验把错误提前暴露成人话。
+        """
+        root = _project_root() / dir_path
+        if not root.exists():
+            return []
+        return [cls(f"{dir_path}/{p.name}") for p in sorted(root.glob("*.yaml"))]

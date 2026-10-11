@@ -53,5 +53,17 @@ class ExecuteCase:
             for c in case_model.cases
         ]
 
+    @classmethod
+    def discover(cls, dir_path: str = "data/api") -> "list[ExecuteCase]":
+        """扫描目录，把每个接口文件的用例**展平**成可执行单元。
+
+        单接口的粒度是「一条 case 一个节点」，所以要展平 ——
+        不是把文件当一个节点（那是场景的做法，见 ScenarioModel.discover）。
+        """
+        cases: list[ExecuteCase] = []
+        for model in CaseModel.discover(dir_path):
+            cases.extend(cls.from_model(model))
+        return cases
+
     def to_pytest_param(self) -> ParameterSet:
         return pytest.param(self, id=self.case_name)

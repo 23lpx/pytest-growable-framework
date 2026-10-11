@@ -56,21 +56,22 @@ Python 3.12，venv 在 `.venv/`。
 自研框架，按「数据 → 模型 → 适配 → pytest → runner」**单向分层**。
 
 ```
-data/*.yaml
+data/api/*.yaml         ← 单接口（dict：base_info + test_cases）
+data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行顺序**）
    │
-   ├─ 单接口（dict：base_info + test_cases）
+   ├─ 单接口 ── CaseModel.discover() 扫目录
    │     │  reader/YamlRead.read
    │     ▼
    │   model/CaseModel            封装：dict → 统一模型 {api, cases[]}
    │     │
    │     ▼
    │   adapter/ExecuteCase        适配：模型 → 执行器契约（一条 = 一个执行单元）
-   │     │
+   │     │  ExecuteCase.discover() **展平**
    │     ▼
    │   pytest 参数化               ← 多 case 调度权在 pytest 手里
    │     每条 case 一个节点（保住 -k / -m / 重跑 / -n 的粒度）
    │
-   └─ 场景（list：N 个接口块，**顺序即执行顺序**）
+   └─ 场景 ── ScenarioModel.discover() 扫目录（**不展平**）
          │  reader/YamlRead.read
          ▼
        model/ScenarioModel       = list[CaseModel]，**复用**单接口解析器（只是拼积木）
@@ -87,14 +88,25 @@ data/*.yaml
           └── handler/ExtractHandler     提取 → context/Context（供后续用例引用）
 ```
 
+**数据驱动（两种发现，同一个模式）**：
+
+| | 发现 | 展平？ | 结果粒度 | 谁在用 |
+|---|---|---|---|---|
+| 单接口 | `CaseModel.discover()` → `ExecuteCase.discover()` | ✅ 展平 | **一条 case 一个节点** | 数据驱动**主力**（量大、独立） |
+| 场景 | `ScenarioModel.discover()` | ❌ 不展平 | **一个场景一个节点** | 只做**简单线性**流程 |
+
+**加数据文件 = 加用例，代码一个字不改** —— `testcase/` 里只有两个文件：`test_api.py`（所有单接口）+ `test_scenario.py`（所有场景）。粒度差别就在「要不要展平」这一处。
+
+**两条路径，一个执行器**：单接口用 pytest 参数化展开成 N 个节点，场景用 `ScenarioRunner` 收成 1 个节点。两者最终都调 `CaseRunner.run(case)` —— **它永远只跑一条，不认识"列表"、也不认识"场景"**。循环策略归调用方，执行能力归 `CaseRunner`。
+
 **两条路径，一个执行器**：单接口用 pytest 参数化展开成 N 个节点，场景用 `ScenarioRunner` 收成 1 个节点。两者最终都调 `CaseRunner.run(case)` —— **它永远只跑一条，不认识"列表"、也不认识"场景"**。循环策略归调用方，执行能力归 `CaseRunner`。
 
 | 模块 | 文件 | 职责 | 状态 |
 |---|---|---|---|
 | reader | `framework/reader/read_yaml.py` | 读文件 → dict | ✅ |
-| model | `framework/model/case_model.py` | 封装（一个接口的用例集） | ✅ |
-| model | `framework/model/scenario_model.py` | 场景解析（list → list[CaseModel]） | ✅ |
-| adapter | `framework/adapter/execute_case.py` | 适配（→ pytest.param） | ✅ |
+| model | `framework/model/case_model.py` | 封装（一个接口的用例集）+ `discover()` 扫目录 | ✅ |
+| model | `framework/model/scenario_model.py` | 场景解析（list → list[CaseModel]）+ `discover()` 扫目录 | ✅ |
+| adapter | `framework/adapter/execute_case.py` | 适配（→ pytest.param）+ `discover()` 展平 | ✅ |
 | runner | `framework/runner/case_runner.py` | 编排单条用例（不认识"列表/场景"） | ✅ |
 | runner | `framework/runner/scenario_runner.py` | 场景编排（顺序 + 步骤日志，内部调 CaseRunner） | ✅ |
 | handler | `framework/handler/request_handler.py` | 发送请求 | ✅ |
@@ -113,7 +125,7 @@ data/*.yaml
 
 **占位符替换必须产副本**：`resolve_case()` 返回 `ResolvedCase`，**绝不就地改原 case** —— `ExecuteCase` 是收集阶段构造、整个 session 共用的（含 `--reruns`），就地改会让第二遍跑到脏数据。
 
-**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集（`test_add_user.py` 排在 `test_login.py` 前），"登录先跑"天然不成立。要前置数据就声明 `conftest` 的 `login` fixture，见 `testcase/test_user.py`。
+**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就声明 `conftest` 的 `login` fixture —— `testcase/test_api.py` 给所有单接口用例都挂上了（session 级只登一次，零成本，不用再按文件声明）。
 
 **文档**：`docs/代码规范.md`（写代码前看）、`docs/interface_test_framework_design_v2.md`、`docs/framework_exception_design_methodology.md`、`docs/修改方案.txt`
 
@@ -123,11 +135,11 @@ data/*.yaml
 
 | 目录 | 干什么 |
 |---|---|
-| `testcase/` | 测试用例（`test_login.py` / `test_user.py`）；`testcase/test_/` 是老用例备份，**pytest 不收**（`norecursedirs`） |
+| `testcase/` | **只有两个文件**：`test_api.py`（收所有单接口）+ `test_scenario.py`（收所有场景）。`testcase/test_/` 是老用例备份，**pytest 不收**（`norecursedirs`） |
 | `framework/` | 框架本体（见上表），只放活代码 |
 | `tests/` | **框架自身的单测**。不在 `testpaths` 里，要显式 `pytest tests/` |
-| `data/` | 单接口测试数据 yaml（一个接口一个文件，`base_info` + `test_cases`） |
-| `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序执行） |
+| `data/api/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
+| `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序执行）。**加文件 = 加场景** |
 | `docs/` | 设计文档 + 代码规范 |
 | `archive/` | 归档：旧链路参考代码 + 被取代的旧设计文档 |
 | `config/` | 配置（空，待做） |
@@ -163,7 +175,8 @@ data/*.yaml
 | 8 | 参数位置自适应：`RequestHandler` 按 method + Content-Type 翻译成 params / json / data | ✅ |
 | 9 | 单接口铺开：8 个接口 28 条用例（用户组 5 + 电商组 3） | ✅ |
 | 10 | **业务场景**：`ScenarioModel` + `ScenarioRunner`，电商下单全链路跑通 | ✅ |
-| 11 | config 收敛（账号 / 超时 现硬编码在 conftest） | ⬜ **下一步** |
+| 11 | **数据驱动**：两种 `discover()`（单接口展平 / 场景不展平），加文件 = 加用例；`testcase/` 收到 2 个文件 | ✅ |
+| 12 | config 收敛（账号 / 超时 现硬编码在 conftest） | ⬜ **下一步** |
 
 ---
 
@@ -182,8 +195,8 @@ data/*.yaml
 # 只收集不执行（条数不对时第一件事）
 ./.venv/Scripts/python.exe -m pytest --collect-only -q
 
-# 按名字筛 / 按标记筛
-./.venv/Scripts/python.exe -m pytest -k login
+# 按名字筛 / 按标记筛（用例 id = 接口名:用例名，中文片段就能筛）
+./.venv/Scripts/python.exe -m pytest -k 商品详情
 ./.venv/Scripts/python.exe -m pytest -m smoke
 ./.venv/Scripts/python.exe -m pytest -m "smoke or regression"
 
@@ -311,9 +324,11 @@ data:
 对应的 testcase 就是**一个函数**（一个场景 = 一个 pytest 节点）：
 
 ```python
-class TestEcommerceFlow:
-    def test_ecommerce_flow(self, client, context):
-        ScenarioRunner(client, context).run(ScenarioModel('/data/scenarios/ecommerce_flow.yaml'))
+# testcase/test_scenario.py —— 一个函数收掉**所有**场景
+class TestScenario:
+    @pytest.mark.parametrize("scenario", ScenarioModel.discover(), ids=lambda s: s.name)
+    def test_scenario(self, scenario, client, context):
+        ScenarioRunner(client, context).run(scenario)
 ```
 
 - **顺序由数据控制**（yaml 列表顺序），**不靠 pytest 收集顺序** —— 这是和单接口最大的区别。

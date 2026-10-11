@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from framework.exception.errors import CaseParseError
+from framework.infra.path import _project_root
 from framework.reader.read_yaml import YamlRead
 
 
@@ -46,6 +47,20 @@ class CaseModel:
         model.cases = []
         model.parse(data)
         return model
+
+    @classmethod
+    def discover(cls, dir_path: str = "data/api") -> "list[CaseModel]":
+        """扫描目录下所有单接口 yaml —— **一个文件 = 一个接口的用例集**。
+
+        与 ScenarioModel.discover 对称：加接口 = 丢一个 yaml 进 data/api/，不碰代码。
+
+        ⚠️ 在**收集阶段**执行（模块导入时求值）：某个 yaml 坏了会让整个测试文件
+        collection error —— pytest 收集是「全有全无」。先接受，等数据多了再上 schema 校验。
+        """
+        root = _project_root() / dir_path
+        if not root.exists():
+            return []
+        return [cls(f"{dir_path}/{p.name}") for p in sorted(root.glob("*.yaml"))]
 
     def parse(self, data: dict) -> None:
         """把「一个接口的 dict」（base_info + test_cases）解析成 ApiCase + list[TestCase]。
