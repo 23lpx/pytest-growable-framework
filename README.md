@@ -288,7 +288,7 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 **⑥ `Path('D:/proj') / '/data/x'` 会顶掉项目根** —— 前导斜杠会让 pathlib 当成绝对路径，结果是 `D:\data\x` 而不是 `D:\proj\data\x`。写 `file_path` 前先 `lstrip("/\\")`。
 
-**⑦ 循环导入** —— `model` 和 `adapter` 互相 import 过一次，直接 `ImportError: partially initialized module`。单向依赖 + 必要时局部 import。
+**⑦ 循环导入** —— 早期模型层和适配层互相 import 过一次，直接 `ImportError: partially initialized module`。单向依赖 + 必要时局部 import。
 
 **⑧ pytest 会递归收 `testpaths` 下的目录** —— `cases/test_/` 这种备份目录也会被收进来，里面 import 断了就整个 `collection error`，**一条都不跑**。已在 `pytest.ini` 用 `norecursedirs = test_` 排除。
 

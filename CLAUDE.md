@@ -129,9 +129,9 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 | `pyproject.toml` | 打包声明（src-layout 的包在 `src/` 下）+ 依赖清单 |
 | `tools/` | 本地工具（allure 命令行），**不进 git**。各人自己解压一份 |
 
-**关键边界**：`HttpClient` 是通用底座，只认纯值（method/path/headers/data），**不许 import 模型**；谁要 `CaseModel`，谁就在 `adapter` / `runner` / `handler` 里。
+**关键边界**：`HttpClient` 是通用底座，只认纯值（method/path/headers/data），**不许 import 模型**；谁要 `CaseModel`，谁就在 `adapters` / `usecases` 里。
 
-**依赖倒置：内层只认端口，不认实现**：`handler` / `runner` 依赖的是 `contracts.Sender`（端口）+ `contracts.ResponseLike`（响应契约），**不 import `client.HttpClient`、也不 import `requests`** —— 全仓只有 `conftest` 知道 `HttpClient` 存在。同理 `adapter` 不 import pytest。判据：**内层模块的 import 里有没有出现具体库或外层类**。
+**依赖倒置：内层只认端口，不认实现**：`adapters` / `usecases` 依赖的是 `ports.Sender`（端口）+ `entities.contracts.ResponseLike`（响应契约），**不 import `infrastructure.HttpClient`、也不 import `requests`** —— 全仓只有 `conftest` 知道 `HttpClient` 存在。同理 `adapters` 不 import pytest。判据：**内层模块的 import 里有没有出现具体库或外层类**。
 
 **资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`Context`（变量池）由 `context` fixture（**session 级**，跨用例关联必须共享）提供。`CaseRunner` / `RequestHandler` **只收不 new**，不持有生命周期。改动时别把 `new HttpClient` 塞回框架内部。
 
@@ -141,7 +141,7 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 
 **数据驱动的边界（用户定调，别越界）**：**单接口是数据驱动主力**（量大、独立、一条 case 一个节点）；**场景只做简单线性流程** —— 场景 yaml 里**不许出现 if / 分支 / 循环**。需要流程控制的（重试、等待、条件跳过）**用代码写**（在 `cases/` 里直接写 test 函数调 `CaseRunner`，即"逃生舱"，和数据用例共存）。判据：**流程线性的 → yaml；有 如果/循环/等待 → 代码**。
 
-**单接口 vs 场景 = 两种消费方式，一个执行器**：单接口用 pytest 参数化展开成 N 个节点（保住 `-k` / `-m` / 单条重跑）；场景用 `ScenarioRunner` 收成 1 个节点（**顺序由 yaml 列表决定**）。**两条路径最终都调 `CaseRunner.run(case)` —— 它永远只跑一条**。所以「加场景」不需要动 `runner` / `handler` / `client`：循环策略归调用方，执行能力归 `CaseRunner`。场景的每个 step 就是「单接口 yaml 的完整形态」，`ScenarioModel` 直接复用 `CaseModel.from_dict` 解析（**组合，不是继承**）。
+**单接口 vs 场景 = 两种消费方式，一个执行器**：单接口用 pytest 参数化展开成 N 个节点（保住 `-k` / `-m` / 单条重跑）；场景用 `ScenarioRunner` 收成 1 个节点（**顺序由 yaml 列表决定**）。**两条路径最终都调 `CaseRunner.run(case)` —— 它永远只跑一条**。所以「加场景」不需要动 `usecases` / `adapters` / `infrastructure`：循环策略归调用方，执行能力归 `CaseRunner`。场景的每个 step 就是「单接口 yaml 的完整形态」，`ScenarioModel` 直接复用 `CaseModel.from_dict` 解析（**组合，不是继承**）。
 
 **参数位置在 `RequestHandler` 决定，不在 `HttpClient`**：`case.data` 是「位置未定」的抽象参数，由 `RequestHandler` 按 method（GET/DELETE → params）+ Content-Type（含 json → json body，否则表单）翻译成 requests 的具体参数位。`HttpClient` 是通用底座，**只认"发什么"、不问"为什么这么发"** —— 决策归适配层，执行归底座。
 
@@ -191,7 +191,7 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 - 用例没跑 / 数量不对 → 先 `--collect-only -q`（十有八九是命名不匹配、参数化没对上，或被 `norecursedirs` 排掉了）
 - `ModuleNotFoundError` → 先想 `-m` vs 直接跑文件
 - 整个 session 一条都不跑 → 看是不是有别的测试目录被收进来报 `collection error`
-- 改了 `src/pytest_framework/` 后行为不对 → 确认改的是哪一层，别把测试专属逻辑塞进 `client`
+- 改了 `src/pytest_framework/` 后行为不对 → 确认改的是哪一层，别把测试专属逻辑塞进 `infrastructure/`
 - `${...}` 报 `ContextError` → 变量池里没这个 key（没提取到 / 提取时的 key 名对不上），去文件日志 `logs/app.log` 看提取那几行
 - 数据库/接口断言"看起来过了但没验到" → 注意 `contains` 是**精确等值**匹配（不是子串），yaml 里要写完整消息
 - 跨用例关联在 `-n` 下失效 → 变量池是进程内的，有依赖的用例集别开 `-n`
