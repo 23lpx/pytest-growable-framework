@@ -199,6 +199,7 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | 12 | **配置收敛**：`src/pytest_framework/adapters/config.py` + `config/config.yaml`；`Context` 加父级，`${...}` 一套语法同时覆盖配置与变量 | ✅ |
 | 13 | **allure 报告**：场景 → 可视化**嵌套 step**；`environment.properties` 从配置生成 | ✅ |
 | 14 | **目录重构**：src-layout + 按架构层分目录（entities / ports / usecases / adapters / infrastructure）；`testcase/` → `cases/`，删 `archive/` | ✅ |
+| 15 | **查库校验**：`ports.QueryExecutor`（只读）+ `DbChecker` + pymysql 底座；yaml 加 `db:` 段 —— 数据校验从「看响应」扩到「看库」 | ✅ |
 
 ---
 
@@ -310,12 +311,15 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 ## 下一步
 
-**MySQL 数据校验**（简历重点③）：
+**查库校验已经通了**（进度表 15），但还欠两件：
 
-1. docker 拉个临时库（「需要的时候用 docker 拉一个临时用就行了」）。
-2. 真正的难点**不是连库，是测试数据管理** —— 现在的用例是「固定值匹配」（`updateUser` 改一位就失败），
+1. **没有真靶子**。`flaskServer.exe` 是**纯内存 mock，压根没有库**（实测见 CLAUDE.md「被测服务」）。
+   所以 `data/api/db_check_cases.yaml` 目前是**链路演示**：接口打 flaskServer、库查 docker 的 demo 库，
+   两边是各自准备的数据。真实项目里两边该是同一套数据源 —— 那时这个文件就是正经用例了。
+2. **测试数据管理**（真正的难点）。现在的用例是「固定值匹配」（`updateUser` 改一位就失败），
    一旦要「跑完接口再查库确认」，立刻撞上「数据从哪来 / 跑完怎么清理」。
-3. 设计「yaml 里怎么描述 DB 期望」—— 比接口断言多一层（数据流扩出 `db` 那一路）。
+   **优先走接口造数**（调被测系统自己的增删接口），而不是直接写库 —— 直接写库绕过了业务逻辑，
+   造出来的数据真实业务里不可能存在。写库只在「测试自己的库（工作库）」时才考虑。
 
 （再往后：自动化集成 —— CI 里跑框架单测 + 接口用例。）
 
