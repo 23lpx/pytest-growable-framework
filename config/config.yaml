@@ -1,0 +1,15 @@
+# 被测环境配置 —— 换环境改这一份，用例数据不用动。
+#
+# 这份文件**故意提交进 git**：本项目跑的是本地 demo 服务、账号是假的，
+# clone 下来直接能跑比较重要。
+# 真实项目里它该进 .gitignore，敏感值走环境变量 / CI secrets ——
+# 覆盖写法：APP_LOGIN__PASSWORD=xxx（双下划线分层，见 framework/constants/config.py）。
+
+base_url: http://127.0.0.1:8787
+
+http:
+  timeout: 10
+
+login:
+  username: test01
+  password: admin123

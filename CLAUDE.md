@@ -25,6 +25,8 @@ Python 3.12，venv 在 `.venv/`。**必须用 `.venv` 里的解释器跑，禁�
 ./.venv/Scripts/python.exe -m pytest --reruns 2 --reruns-delay 1       # 失败重跑
 ./.venv/Scripts/python.exe -m pytest -n 2                              # 分布式（用例必须互不依赖）
 ./.venv/Scripts/python.exe -m framework.infra.logger                   # 跑单模块：包内 import 必须用 -m
+./.venv/Scripts/python.exe -m pytest --alluredir=reports/allure-results  # 出 allure 原始数据
+./tools/allure-2.46.1/bin/allure.bat open reports/allure-report         # 看报告（别双击 index.html，file:// 会白屏）
 ./.venv/Scripts/python.exe -m pip install -r requirements.txt
 ```
 
@@ -99,13 +101,16 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 | `framework/context/context.py` | `Context` —— 内存变量池。`a.b.c` 点号路径，取不到抛 `ContextError` |
 | `framework/context/replacer.py` | `ResolvedCase` + `resolve_case()` —— 解析 `${token}` / `${today()}`，**产副本** |
 | `framework/context/functions.py` | 函数市场：`@register("today")`，加函数不用改框架 |
+| `framework/config.py` | 环境配置。`Config.load()` 读 yaml + 叠环境变量覆盖；**内部是 `Context`**，可直接当变量池的父级 |
 | `framework/client/http_client.py` | 通用 HTTP 底座（session / timeout / base_url 拼接 / 日志）。**不认识测试概念** |
 | `framework/exception/` | 异常体系（`base.py` + `errors.py`） |
 | `framework/constants/` | 常量，魔法值收口（一个主题一个模块） |
-| `framework/contracts.py` | 跨层契约 `CaseLike`（Protocol） |
-| `framework/infra/` | 基础设施：`logger.py`（命名 logger + 脱敏）/ `masking.py` / `path.py` |
+| `framework/contracts.py` | 跨层契约（Protocol）：`CaseLike`、`VariableSource` |
+| `framework/infra/` | 基础设施：`logger.py`（命名 logger + 脱敏）/ `masking.py` / `path.py` / `report.py`（allure 薄封装） |
 | `data/api/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
 | `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序）。**加文件 = 加场景** |
+| `config/config.yaml` | **环境配置**（base_url / timeout / 账号）。换环境只改这份。真实项目该进 `.gitignore` |
+| `tools/` | 本地工具（allure 命令行），**不进 git**。各人自己解压一份 |
 | `tests/` | **框架自身的单测**（不依赖被测服务）。裸跑 pytest 收不到，要 `pytest tests/` |
 | `archive/` | 归档的旧链路参考代码 + 被取代的旧设计文档。**不要 import 它** |
 
@@ -122,6 +127,12 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 **单接口 vs 场景 = 两种消费方式，一个执行器**：单接口用 pytest 参数化展开成 N 个节点（保住 `-k` / `-m` / 单条重跑）；场景用 `ScenarioRunner` 收成 1 个节点（**顺序由 yaml 列表决定**）。**两条路径最终都调 `CaseRunner.run(case)` —— 它永远只跑一条**。所以「加场景」不需要动 `runner` / `handler` / `client`：循环策略归调用方，执行能力归 `CaseRunner`。场景的每个 step 就是「单接口 yaml 的完整形态」，`ScenarioModel` 直接复用 `CaseModel.from_dict` 解析（**组合，不是继承**）。
 
 **参数位置在 `RequestHandler` 决定，不在 `HttpClient`**：`case.data` 是「位置未定」的抽象参数，由 `RequestHandler` 按 method（GET/DELETE → params）+ Content-Type（含 json → json body，否则表单）翻译成 requests 的具体参数位。`HttpClient` 是通用底座，**只认"发什么"、不问"为什么这么发"** —— 决策归适配层，执行归底座。
+
+**配置 vs 用例数据**：用例数据（yaml 的 `data`）写「**测什么**」，配置（`config/config.yaml`）写「**在哪测**」。判据：**这条值换个环境还成立吗**？不成立 → 归配置。⚠️ 同一个 yaml 里两种东西会并存 —— `login_cases.yaml` 的「登录成功」用 `${login.username}` 引配置，而「密码错误」的 `passwd: wrong` 是用例数据。**配置层只读**：`Context.set` 只写自己那层，覆盖不了它。
+
+**配置和变量池是同一条查找链**：`conftest` 的 `context` fixture 建的是 `Context(parent=config)` —— `${login.username}` 落配置层、`${token}` 走变量层，**一套语法**。`Context` 只认 `contracts.VariableSource` 契约，**不认识 `Config`**：将来配置换成数据库 / 配置中心，`Context` 一个字不用改。
+
+**报告不直接 `import allure`**：`ScenarioRunner` 写步骤走 `framework/infra/report.py` 的 `step()` 薄封装 —— 这是框架核心**第一次依赖外部工具**，耦合收在这一个文件里，将来换 pytest-html 只改这里。⚠️ `conftest` 生成的 `environment.properties` **只写非敏感项**，密码绝不进报告（报告要发给别人看）。
 
 ## 代码规范（硬约束，详见 `docs/代码规范.md`）
 
@@ -154,7 +165,7 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 
 ## 被测服务
 
-`flaskServer.exe`（PyInstaller 打包的 PyQt5 GUI），`http://127.0.0.1:8787`。**重启电脑后要手动双击 exe 并点窗口里的「启动服务」**，光开窗口服务不会自己起。账号 `test01` / `admin123`。
+`flaskServer.exe`（PyInstaller 打包的 PyQt5 GUI），`http://127.0.0.1:8787`。**重启电脑后要手动双击 exe 并点窗口里的「启动服务」**，光开窗口服务不会自己起。账号 `test01` / `admin123`（配在 `config/config.yaml`，用例里用 `${login.username}` 引用）。
 
 **鉴权用 token，不是 cookie**：登录响应返回 `token`，后续请求把它当**表单参数**传（不是放 header）；缺/错 token → `9001 新增失败，参数缺失或token失效`。
 

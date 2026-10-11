@@ -24,6 +24,8 @@
 |---|---|
 | `test01` | `admin123` |
 
+（这两个值配在 `config/config.yaml` 里，用例 yaml 用 `${login.username}` 引用，**不写死**。）
+
 ⚠️ **鉴权用 token，不是 cookie** —— 登录响应里返回 `token` 字段，后续请求把它当**表单参数**传（不是放 header）。
 缺 token → `9001 新增失败，参数缺失或token失效`。
 
@@ -99,8 +101,6 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 
 **两条路径，一个执行器**：单接口用 pytest 参数化展开成 N 个节点，场景用 `ScenarioRunner` 收成 1 个节点。两者最终都调 `CaseRunner.run(case)` —— **它永远只跑一条，不认识"列表"、也不认识"场景"**。循环策略归调用方，执行能力归 `CaseRunner`。
 
-**两条路径，一个执行器**：单接口用 pytest 参数化展开成 N 个节点，场景用 `ScenarioRunner` 收成 1 个节点。两者最终都调 `CaseRunner.run(case)` —— **它永远只跑一条，不认识"列表"、也不认识"场景"**。循环策略归调用方，执行能力归 `CaseRunner`。
-
 | 模块 | 文件 | 职责 | 状态 |
 |---|---|---|---|
 | reader | `framework/reader/read_yaml.py` | 读文件 → dict | ✅ |
@@ -117,11 +117,13 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | exception | `framework/exception/` | 异常体系 | ✅ |
 | constants | `framework/constants/` | 常量（魔法值收口） | ✅ |
 | contracts | `framework/contracts.py` | 跨层契约（Protocol） | ✅ |
-| infra | `framework/infra/` | 日志（**含脱敏**）/ 路径 | ✅ |
+| infra | `framework/infra/` | 日志（**含脱敏**）/ 路径 / **报告**（allure 薄封装） | ✅ |
 | tests | `tests/` | 框架自身的单测（不依赖被测服务） | ✅ |
-| config | `config/` | 配置（base_url / 账号 / 超时） | ⬜ 空（base_url 现硬编码在 conftest） |
+| config | `framework/config.py` | 配置加载（yaml + 环境变量覆盖），可当 `Context` 的父级 | ✅ |
 
 **资源生命周期靠依赖注入**：`HttpClient` 由 `conftest` 的 `client` fixture（**session 级**，为连接复用）创建并 `close()`；`Context`（变量池）由 `context` fixture（**session 级**，跨用例关联必须共享）提供。`CaseRunner` / `RequestHandler` 只收不 new。整轮测试共用 1 条连接（不是每条用例一条）。
+
+**配置当变量池的父级**：`context` fixture 建的是 `Context(parent=config)` —— `${...}` 因此只有**一个入口**：`${token}` 查变量层（运行时提取的），`${login.username}` 落到配置层（`config/config.yaml`）。**配置层只读**：用例 `set` 同名 key 只写自己那层，覆盖不了配置。`Context` 只认 `VariableSource` 契约，**不认识 `Config`** —— 换任何别的来源都行。
 
 **占位符替换必须产副本**：`resolve_case()` 返回 `ResolvedCase`，**绝不就地改原 case** —— `ExecuteCase` 是收集阶段构造、整个 session 共用的（含 `--reruns`），就地改会让第二遍跑到脏数据。
 
@@ -142,10 +144,11 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序执行）。**加文件 = 加场景** |
 | `docs/` | 设计文档 + 代码规范 |
 | `archive/` | 归档：旧链路参考代码 + 被取代的旧设计文档 |
-| `config/` | 配置（空，待做） |
+| `config/` | **环境配置**：`config.yaml`（base_url / 超时 / 账号）。换环境改这份，用例不用动 |
 | `logs/` | 日志（按天切，**已脱敏**） |
-| `reports/` | 测试报告（allure，空） |
-| `conftest.py` | `base_url` / `client` / `context` / `login` fixture + `init_logger()` |
+| `reports/` | 报告产物（allure 原始数据 + 静态 HTML），**不进 git** |
+| `tools/` | 本地工具（allure 命令行），**不进 git**。各人自己解压一份 |
+| `conftest.py` | `config` / `base_url` / `client` / `context` / `login` fixture + `init_logger()` |
 | `pytest.ini` | pytest 配置 |
 
 ---
@@ -176,7 +179,8 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | 9 | 单接口铺开：8 个接口 28 条用例（用户组 5 + 电商组 3） | ✅ |
 | 10 | **业务场景**：`ScenarioModel` + `ScenarioRunner`，电商下单全链路跑通 | ✅ |
 | 11 | **数据驱动**：两种 `discover()`（单接口展平 / 场景不展平），加文件 = 加用例；`testcase/` 收到 2 个文件 | ✅ |
-| 12 | config 收敛（账号 / 超时 现硬编码在 conftest） | ⬜ **下一步** |
+| 12 | **配置收敛**：`framework/config.py` + `config/config.yaml`；`Context` 加父级，`${...}` 一套语法同时覆盖配置与变量 | ✅ |
+| 13 | **allure 报告**：场景 → 可视化**嵌套 step**；`environment.properties` 从配置生成 | ✅ |
 
 ---
 
@@ -185,6 +189,12 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 ```bash
 # 跑接口用例（testpaths = testcase）
 ./.venv/Scripts/python.exe -m pytest
+
+# 换环境：临时指到别的服务地址（优先级：命令行 > 环境变量 > config/config.yaml）
+./.venv/Scripts/python.exe -m pytest --base-url http://127.0.0.1:9999
+
+# 敏感值用环境变量注入（APP_ 前缀 + 双下划线分层）
+APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 # 跑框架自身的单测（不依赖被测服务，改 framework/ 后先跑这个）
 ./.venv/Scripts/python.exe -m pytest tests/
@@ -211,6 +221,11 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 
 # 以「模块」方式跑单个文件（file 方式会找不到包）
 ./.venv/Scripts/python.exe -m framework.infra.logger
+
+# 出 allure 报告：①出数据 → ②渲染静态 HTML → ③起服务看
+./.venv/Scripts/python.exe -m pytest --alluredir=reports/allure-results
+./tools/allure-2.46.1/bin/allure.bat generate reports/allure-results -o reports/allure-report --clean
+./tools/allure-2.46.1/bin/allure.bat open reports/allure-report
 ```
 
 ---
@@ -269,17 +284,22 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 
 **⑬ logger 级 Filter 管不到冒泡上来的日志** —— `logger.addFilter()` 只在 `Logger.handle()` 里对**直接记到该 logger** 的消息执行。框架里日志全是 `logging.getLogger(__name__)`（`framework.xxx`），挂在 `"framework"` 上的 filter 根本轮不到 —— **而且它静默失效**，不报错。要打码就挂 record 工厂（`logging.setLogRecordFactory`），从源头下手。
 
+**⑭ `autouse` fixture 的依赖写在签名里 = 强制求值** —— fixture 的参数在**函数体之前**求值，`autouse` 又作用于整个会话，所以「签名里有 `config`」等于**每次跑 pytest 都加载配置** —— 函数体里那句 `if not 条件: return` 拦不住它。实测后果：配置文件一删，`pytest tests/` 的 **84 条框架单测全 ERROR**。要真惰性就挪进函数体：`cfg = request.getfixturevalue("config")`。（`conftest.py` 的 `_allure_environment` 踩过这个。）
+
+**⑮ 单测别读生产配置** —— 断言一旦绑在真实值上，「改一下 `config/config.yaml`」就会把单测带崩，「框架单测零依赖」变成空话。单测要配置文件就用自己的（`tests/data/config.yaml`）。
+
 ---
 
 ## 下一步
 
-**config 收敛**：
+**MySQL 数据校验**（简历重点③）：
 
-1. `config/` —— 把还散落的**账号密码**（`test01` / `admin123`，硬编码在 `conftest` 的 `login` fixture）收进配置。
-   （`base_url` 已经走 `--base-url` 命令行参数了，不在这里。）
-2. 顺手：`environment.xml` 可以从同一份配置**生成**（allure 报告的环境信息页）。
+1. docker 拉个临时库（「需要的时候用 docker 拉一个临时用就行了」）。
+2. 真正的难点**不是连库，是测试数据管理** —— 现在的用例是「固定值匹配」（`updateUser` 改一位就失败），
+   一旦要「跑完接口再查库确认」，立刻撞上「数据从哪来 / 跑完怎么清理」。
+3. 设计「yaml 里怎么描述 DB 期望」—— 比接口断言多一层（数据流扩出 `db` 那一路）。
 
-（再往后：allure 报告 —— 第 26 集；MySQL 数据校验；自动化集成。）
+（再往后：自动化集成 —— CI 里跑框架单测 + 接口用例。）
 
 ---
 
@@ -339,3 +359,89 @@ class TestScenario:
 - **代价**：`-k` / `-m` / 重跑只能按**场景粒度**，筛不到单个 step。
 
 **为什么复用 `CaseModel`**：场景的一个 step = 单接口 yaml 的完整形态，所以 `ScenarioModel` 直接拿 `CaseModel` 解析每个元素（`CaseModel.from_dict`）——「组合」而不是「另造一套」。同理 `ScenarioRunner` 内部调 `CaseRunner`，不重写四步。
+
+---
+
+## 配置怎么改（阶段 12 产物）
+
+**边界**：用例数据（yaml 的 `data`）写「**测什么**」，换环境不该变；配置写「**在哪测**」，换环境就变。
+判据：**这条值换个环境还成立吗**？不成立 → 归配置。
+
+`config/config.yaml`：
+
+```yaml
+base_url: http://127.0.0.1:8787
+
+http:
+  timeout: 10
+
+login:                 # 只有「正确的账号密码」进配置
+  username: test01
+  password: admin123
+```
+
+用例里用 `${...}` 引用 —— 和变量池**同一套语法**，不用记两种：
+
+```yaml
+data:
+  user_name: ${login.username}   # 落到配置层
+  passwd:    ${login.password}
+  token:     ${token}            # 走变量层（运行时提取的）
+```
+
+> 注意区分：`login_cases.yaml` 里「密码错误」那条的 `passwd: wrong` 是**用例数据**（故意写错），
+> 只有「登录成功」那条的账号密码才是**配置**。同一个文件里两种东西并存，靠上面的判据分开。
+
+**优先级**：命令行 `--base-url` > 环境变量 > `config/config.yaml`。
+
+```bash
+./.venv/Scripts/python.exe -m pytest --base-url http://127.0.0.1:9999
+APP_LOGIN__PASSWORD=real_pwd ./.venv/Scripts/python.exe -m pytest
+```
+
+- 环境变量约定：`APP_` 前缀 + **双下划线**分层（`APP_LOGIN__PASSWORD` → `login.password`）。
+  单下划线是 key 本身的一部分（`base_url`），**不分层** —— 拿它分层会把 `base_url` 拆成 `base.url`。
+- 环境变量的值按配置里**原有值的类型**转（`timeout` 是 int，覆盖后仍是 int），
+  否则 `"30"` 会一路传进 requests。
+- 这份配置**故意提交进 git**（本地 demo 服务、账号是假的，clone 即跑更要紧）。
+  **真实项目里它该进 `.gitignore`**，敏感值只走环境变量 / CI secrets。
+- 实现 `framework/config.py`：内部就是一个 `Context`，所以能直接当变量池的**父级**。
+  `Context` 只认 `VariableSource` 契约，不认识 `Config` —— 将来换成数据库 / 配置中心，`Context` 一个字不用改。
+
+---
+
+## 报告怎么看（阶段 13 产物）
+
+allure 分两步：**pytest 出原始数据** → **allure 命令行渲染成页面**。
+
+```bash
+# 1. 跑用例 + 出原始数据（--alluredir 是 allure-pytest 插件注册的选项）
+./.venv/Scripts/python.exe -m pytest --alluredir=reports/allure-results
+
+# 2. 渲染成静态 HTML
+./tools/allure-2.46.1/bin/allure.bat generate reports/allure-results -o reports/allure-report --clean
+
+# 3. 看 —— 起本地 HTTP 服务 + 自动开浏览器
+./tools/allure-2.46.1/bin/allure.bat open reports/allure-report
+#   或直接从原始数据起（跳过第 2 步）
+./tools/allure-2.46.1/bin/allure.bat serve reports/allure-results
+```
+
+⚠️ **别双击 `index.html`** —— allure 是单页应用，`file://` 下会因 CORS 白屏，**必须走 HTTP 服务**。
+
+报告里能看到什么：
+
+| 位置 | 内容 | 来自 |
+|---|---|---|
+| Behaviors | 按 `feature` / `story` 分组：`单接口` → 各接口；`业务场景` → 各场景 | `testcase/*.py` 的 `@allure.feature` + `allure.dynamic.story` |
+| 用例详情 | 场景的 **5 个嵌套 step**（登录→列表→详情→下单→支付），一眼看出断在哪步 | `ScenarioRunner` 的 `report.step()` |
+| Environment | `base_url` / `timeout` / 账号 / Python 版本 | `conftest` 的 `_allure_environment`（从 `config` 生成） |
+
+**两个设计点**：
+
+1. **框架不直接 `import allure`** —— 走 `framework/infra/report.py` 的 `step()` 薄封装。
+   这是框架核心**第一次依赖外部工具**，把耦合收在一个文件里，将来换 pytest-html 只改这里。
+2. **密码绝不进报告** —— `environment.properties` 只写非敏感项；报告是要发给别人看的。
+
+`tools/allure-2.46.1/` 是本地解压的 allure 命令行（**不进 git**）—— 路径不对就换成你自己的，
+或者装到系统 PATH 里。它需要 **JDK**（本机已有 Java 22）。

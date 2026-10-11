@@ -14,6 +14,9 @@ venv/
 logs/
 reports/
 
+# ---- 本地工具（allure 命令行等，体积大，各人自己装）----
+tools/
+
 # ---- IDE / 本机配置 ----
 .idea/
 .mcp.json

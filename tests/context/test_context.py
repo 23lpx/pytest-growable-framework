@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from framework.context.context import Context
@@ -72,3 +74,61 @@ class TestContext:
         assert isinstance(ctx.get("count"), int)
         assert ctx.get("items") == [1, 2]
         assert ctx.get("flag") is True
+
+
+class FakeSource:
+    """最小的「变量来源」桩：只认整串 key，不做点号路径。
+
+    用它而不是真的 Config —— 这里测的是 Context 对父级的**契约**
+    （查不到往上问、自己层优先、set 不写父级），跟配置怎么加载无关。
+    """
+
+    def __init__(self, data: dict) -> None:
+        self._data = data
+
+    def get(self, key: str) -> Any:
+        if key not in self._data:
+            raise ContextError(f"变量不存在: {key}")
+        return self._data[key]
+
+    def exists(self, key: str) -> bool:
+        return key in self._data
+
+
+class TestParentLookup:
+    """父级查找链：自己层优先，其次父级，都没有才抛。"""
+
+    def test_falls_back_to_parent(self) -> None:
+        ctx = Context(parent=FakeSource({"login.password": "admin123"}))
+        assert ctx.get("login.password") == "admin123"
+
+    def test_own_layer_wins(self) -> None:
+        """父级是兜底，不是优先 —— 自己层有就用自己层的。"""
+        ctx = Context(parent=FakeSource({"token": "from-config"}))
+        ctx.set("token", "from-extract")
+        assert ctx.get("token") == "from-extract"
+
+    def test_set_does_not_touch_parent(self) -> None:
+        """set 只写自己层：配置层只读，用例覆盖不了它。"""
+        parent = FakeSource({"a": 1})
+        ctx = Context(parent=parent)
+        ctx.set("a", 2)
+
+        assert parent.get("a") == 1
+        assert ctx.get("a") == 2
+
+    def test_neither_layer_raises(self) -> None:
+        ctx = Context(parent=FakeSource({}))
+        with pytest.raises(ContextError):
+            ctx.get("nope")
+
+    def test_exists_sees_parent(self) -> None:
+        ctx = Context(parent=FakeSource({"x": 1}))
+        assert ctx.exists("x")
+        assert not ctx.exists("y")
+
+    def test_no_parent_unchanged(self) -> None:
+        """不挂父级时行为与从前一致 —— 新参数不该改变老语义。"""
+        ctx = Context()
+        with pytest.raises(ContextError):
+            ctx.get("x")

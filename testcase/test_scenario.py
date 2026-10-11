@@ -1,3 +1,4 @@
+import allure
 import pytest
 
 from framework.client.http_client import HttpClient
@@ -6,6 +7,7 @@ from framework.model.scenario_model import ScenarioModel
 from framework.runner.scenario_runner import ScenarioRunner
 
 
+@allure.feature("业务场景")
 class TestScenario:
     """所有业务场景：**一个 yaml 文件 = 一个 pytest 节点**。
 
@@ -18,4 +20,5 @@ class TestScenario:
 
     @pytest.mark.parametrize("scenario", ScenarioModel.discover(), ids=lambda s: s.name)
     def test_scenario(self, scenario: ScenarioModel, client: HttpClient, context: Context) -> None:
+        allure.dynamic.story(scenario.name)
         ScenarioRunner(client, context).run(scenario)

@@ -1,3 +1,4 @@
+import allure
 import pytest
 
 from framework.adapter.execute_case import ExecuteCase
@@ -6,6 +7,7 @@ from framework.context.context import Context
 from framework.runner.case_runner import CaseRunner
 
 
+@allure.feature("单接口")
 class TestApi:
     """所有单接口用例：**一条 case = 一个 pytest 节点**（粒度没变）。
 
@@ -26,4 +28,6 @@ class TestApi:
         ids=lambda c: f"{c.api_name}:{c.case_name}",
     )
     def test_api(self, case: ExecuteCase, client: HttpClient, context: Context, login) -> None:
+        # 报告里按「接口」分组 —— 参数化 id 里虽然带着接口名，但那是字符串，分不了组
+        allure.dynamic.story(case.api_name)
         CaseRunner(client, context).run(case)

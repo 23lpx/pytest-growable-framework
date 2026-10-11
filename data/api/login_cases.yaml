@@ -8,8 +8,9 @@ base_info:
 test_cases:
   - case_name: 用户名密码正确登录
     data:
-      user_name: test01
-      passwd: admin123
+      # 账号密码来自 config/config.yaml，换环境不用改用例
+      user_name: ${login.username}
+      passwd: ${login.password}
     validation:
       - contains:
           msg: 登录成功
@@ -33,7 +34,8 @@ test_cases:
   - case_name: 账号不存在
     data:
       user_name: nobody
-      passwd: admin123
+      # 这条测的是用户名不存在，密码用啥都行 —— 别写真的，免得明文密码在仓库里多一处
+      passwd: whatever
     validation:
       - contains:
           msg: 登录失败,用户名或密码错误

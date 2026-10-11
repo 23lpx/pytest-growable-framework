@@ -6,3 +6,4 @@ pytest
 pytest-ordering
 pytest-rerunfailures
 pytest-xdist
+allure-pytest

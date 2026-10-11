@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class CaseLike(Protocol):
@@ -20,3 +20,19 @@ class CaseLike(Protocol):
     data: dict
     validations: list
     extracts: dict
+
+
+class VariableSource(Protocol):
+    """「能按点号路径取值」的来源（门禁）。
+
+    `Context` 自己满足它，`Config` 也满足它 —— `Context` 的 parent 就是一个
+    `VariableSource`。这样「变量池」和「配置」能拼成一条查找链，
+    而 `Context` 不必知道父级具体是配置还是别的什么。
+
+    约定：取不到**抛 ContextError**、不返回 None。
+    同一条链上异常类型一致，穿透时就不用做异常转换。
+    """
+
+    def get(self, key: str) -> Any: ...
+
+    def exists(self, key: str) -> bool: ...
