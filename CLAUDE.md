@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 他的水平：能独立写 yaml 驱动 + fixture + 参数化，现在在搭自己的框架，已经能讨论分层、依赖方向、契约设计。
 - **`README.md` 是进度日志和避坑清单**，改动前后读一遍；每完成一个阶段，进度表、目录表要同步更新。
 - **`docs/代码规范.md` 是写代码的硬约束**，动 `framework/` 前先看。
+- **`docs/架构审查.md` 是分层基线和依赖判据** —— 加新模块 / 想抽接口前先对照它（尤其「有意的逆流，别动」那节，别把刻意的耦合当成 bug 修掉）。
 
 ## 运行与开发命令
 

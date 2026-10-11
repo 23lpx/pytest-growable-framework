@@ -131,7 +131,7 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 
 **跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就声明 `conftest` 的 `login` fixture —— `testcase/test_api.py` 给所有单接口用例都挂上了（session 级只登一次，零成本，不用再按文件声明）。
 
-**文档**：`docs/代码规范.md`（写代码前看）、`docs/interface_test_framework_design_v2.md`、`docs/framework_exception_design_methodology.md`、`docs/修改方案.txt`
+**文档**：`docs/代码规范.md`（写代码前看）、`docs/架构审查.md`（分层基线 + 依赖判据，加东西前对照）、`docs/interface_test_framework_design_v2.md`、`docs/framework_exception_design_methodology.md`、`docs/修改方案.txt`
 
 ---
 
