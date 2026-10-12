@@ -341,6 +341,22 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
   （PyQt5），GitHub 的 Linux runner 起不了，而且 exe 不在仓库里。
   出路是 **self-hosted runner**（跑在自己机器上，那儿有 exe）—— 真需要了再做。
 
+**CI 要在 GitHub 上配的 Secrets**（仓库 Settings → Secrets and variables → **Actions**，
+**不是 Environments**）—— 这些值只住在 GitHub，**绝不进仓库**：
+
+| Name | 用途 |
+|---|---|
+| `DINGTALK_WEBHOOK` | 钉钉机器人 Webhook 地址（安全设置选**「加签」**） |
+| `DINGTALK_SECRET` | 钉钉加签密钥（`SEC` 开头） |
+| `SMTP_HOST` | 如 `smtp.qq.com` |
+| `SMTP_PORT` | `465`（脚本走 SSL；填 587 是 STARTTLS，连不上） |
+| `SMTP_USER` | 完整邮箱地址 |
+| `SMTP_PASSWORD` | **授权码**，不是登录密码（QQ 邮箱要先开「IMAP/SMTP服务」） |
+| `MAIL_TO` | 收件人，多个用逗号隔开 |
+
+`MAIL_FROM` 可省（默认取 `SMTP_USER`）。**没配的渠道会被 `notify.py` 自动跳过** ——
+本地跑不会因为缺配置而报错。
+
 ---
 
 ## 接口关联怎么用（阶段 7 产物）
