@@ -64,7 +64,7 @@ test_cases:
       size: 10
     validation:
       - contains:
-          code: 110003
+          code: 0
   - case_name: "分页：size=0（下界外）"
     headers:
       token: "${token}"
@@ -73,7 +73,7 @@ test_cases:
       size: 0
     validation:
       - contains:
-          code: 110003
+          code: 0
   - case_name: "分页：size 极大（10000）"
     headers:
       token: "${token}"

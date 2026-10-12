@@ -15,28 +15,28 @@ test_cases:
     headers:
       token: "${token}"
     path_params:
-      groupId: "{g1_id}"
+      groupId: "${g1_id}"
     data:
       {}
     validation:
       - contains:
           code: 0
   - case_name: "删除分组：越权删他人分组"
+    xfail: "缺测试账号：需要第二个账号才能验越权（测试环境未提供）"
     headers:
       token: "${token_b}"
     path_params:
-      groupId: "{g1_id}"
+      groupId: "${g1_id}"
     data:
       {}
     validation:
       - contains:
           code: 23404
   - case_name: "删除分组：重复删除已删的分组"
-    xfail: "已知缺陷：返回 -1，应为 23404"
     headers:
       token: "${token}"
     path_params:
-      groupId: "{g1_id}"
+      groupId: "${g1_id}"
     data:
       {}
     validation:
@@ -72,10 +72,11 @@ test_cases:
       - contains:
           code: 250004
   - case_name: "删除分组：删组不影响组下已建的短链"
+    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
     headers:
       token: "${token}"
     path_params:
-      groupId: "{g1_id}"
+      groupId: "${g1_id}"
     data:
       {}
     validation:

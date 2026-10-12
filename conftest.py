@@ -151,6 +151,51 @@ def shortlink_login(shortlink_client: HttpClient, context: Context) -> None:
 
 
 @pytest.fixture(scope='session')
+def shortlink_prepare(shortlink_client: HttpClient, context: Context) -> None:
+    """造短链平台用例要用的前置数据，写进变量池。
+
+    **为什么要有它**：分组表好几条用例依赖「g1 分组已存在」（同账号重名、尾随空格
+    算重名、大小写不同不算重名…），建链/更新/删除那几批又要 `groupId`。
+    这些是**测试自己该准备的数据** —— 不该指望"环境里碰巧有"（碰巧有会过，
+    清一次库就全挂，是最难查的那种不稳定）。
+
+    造两样东西：
+      · `g1` 分组      → `${g1_id}`（分组详情/删除/更新的路径参数、建链的 groupId）
+      · 官方域名        → `${domain_id}` / `${domain_type}`（建链要用）
+
+    ⚠️ 建分组是**幂等容忍**的：已存在会返回 23001，这里不管它 —— 正好，
+        "同账号重名"那条用例本来就要的就是这个状态。
+    """
+    token = context.get("token")
+    headers = {"Content-Type": "application/json", "token": token}
+
+    # 1. 建 g1（已存在返回 23001，直接忽略）
+    shortlink_client.request(
+        "POST", "/link-server/api/group/v1/add",
+        json={"title": "g1"}, headers=headers,
+    )
+
+    # 2. 从列表里把 g1 的 id 捞出来 —— 注意 add 接口**不返回 id**（data 恒 null）
+    resp = shortlink_client.request(
+        "GET", "/link-server/api/group/v1/list", headers=headers
+    )
+    for group in resp.json().get("data") or []:
+        if group.get("title") == "g1":
+            context.set("g1_id", group["id"])
+            break
+
+    # 3. 官方域名的 id 入池（建链的 domainId/domainType）
+    resp = shortlink_client.request(
+        "GET", "/link-server/api/domain/v1/list", headers=headers
+    )
+    for domain in resp.json().get("data") or []:
+        if domain.get("domainType") == "OFFICIAL":
+            context.set("domain_id", domain["id"])
+            context.set("domain_type", "OFFICIAL")
+            break
+
+
+@pytest.fixture(scope='session')
 def db_checker(config: Config) -> Iterator[DbChecker | None]:
     """查库校验器 —— 库校验那条路的入口。
 

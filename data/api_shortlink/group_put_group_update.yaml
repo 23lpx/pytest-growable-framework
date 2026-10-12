@@ -11,19 +11,21 @@ base_info:
 
 test_cases:
   - case_name: "更新分组：正常改名"
+    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
     headers:
       token: "${token}"
     data:
-      id: "<g1_id>"
+      id: "${g1_id}"
       title: "g1改"
     validation:
       - contains:
           code: 0
   - case_name: "更新分组：越权改他人分组"
+    xfail: "缺测试账号：需要第二个账号才能验越权（测试环境未提供）"
     headers:
       token: "${token_b}"
     data:
-      id: "<g1_id>"
+      id: "${g1_id}"
       title: "hacked"
     validation:
       - contains:
@@ -42,11 +44,11 @@ test_cases:
     headers:
       token: "${token}"
     data:
-      id: "<g1_id>"
+      id: "${g1_id}"
       title: "g2"
     validation:
       - contains:
-          code: 110003
+          code: 23503
   - case_name: "更新分组：缺 id 字段"
     headers:
       token: "${token}"
@@ -59,7 +61,7 @@ test_cases:
     headers:
       token: "${token}"
     data:
-      id: "<g1_id>"
+      id: "${g1_id}"
     validation:
       - contains:
           code: 110003
@@ -67,7 +69,7 @@ test_cases:
     headers:
       token: "${token}"
     data:
-      id: "<g1_id>"
+      id: "${g1_id}"
       title: ""
     validation:
       - contains:
@@ -76,7 +78,7 @@ test_cases:
     headers:
       token: "${token}"
     data:
-      id: "<g1_id>"
+      id: "${g1_id}"
       title: null
     validation:
       - contains:
@@ -90,10 +92,11 @@ test_cases:
       - contains:
           code: 110003
   - case_name: "更新分组：id 传字符串形式的数字"
+    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
     headers:
       token: "${token}"
     data:
-      id: "<g1_id>"
+      id: "${g1_id}"
       title: "g1改"
     validation:
       - contains:

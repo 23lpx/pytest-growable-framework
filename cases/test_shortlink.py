@@ -46,6 +46,7 @@ class TestShortLink:
         shortlink_client: HttpClient,
         context: Context,
         shortlink_login,
+        shortlink_prepare,
     ) -> None:
         allure.dynamic.story(case.api_name)
         CaseRunner(shortlink_client, context).run(case)

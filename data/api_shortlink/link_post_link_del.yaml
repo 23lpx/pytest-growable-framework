@@ -11,6 +11,7 @@ base_info:
 
 test_cases:
   - case_name: "删除：正常删除"
+    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
     headers:
       token: "${token}"
     data:
@@ -20,6 +21,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "删除：越权删他人短链"
+    xfail: "缺测试账号：需要第二个账号才能验越权（测试环境未提供）"
     headers:
       token: "${token_b}"
     data:

@@ -138,6 +138,7 @@ test_cases:
       - contains:
           code: 250004
   - case_name: "租户隔离：B 查 A 的短链统计（对照组必须有数据）"
+    xfail: "缺测试账号：需要第二个账号才能验越权（测试环境未提供）"
     headers:
       token: "${token_b}"
     data:

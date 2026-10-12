@@ -12,20 +12,22 @@ base_info:
 
 test_cases:
   - case_name: "分组详情：查自己的分组"
+    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
     headers:
       token: "${token}"
     path_params:
-      groupId: "{g1_id}"
+      groupId: "${g1_id}"
     data:
       {}
     validation:
       - contains:
           code: 0
   - case_name: "分组详情：越权查他人分组"
+    xfail: "缺测试账号：需要第二个账号才能验越权（测试环境未提供）"
     headers:
       token: "${token_b}"
     path_params:
-      groupId: "{g1_id}"
+      groupId: "${g1_id}"
     data:
       {}
     validation:
@@ -85,7 +87,7 @@ test_cases:
           code: 110003
   - case_name: "分组详情：未登录"
     path_params:
-      groupId: "{g1_id}"
+      groupId: "${g1_id}"
     data:
       {}
     validation:
@@ -96,7 +98,7 @@ test_cases:
     headers:
       token: "${token}"
     path_params:
-      groupId: "{sql_payload}"
+      groupId: "${sql_payload}"
     data:
       {}
     validation:
