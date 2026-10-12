@@ -31,6 +31,7 @@ class CaseLike(Protocol):
     validations: list
     extracts: dict
     db_validations: list
+    path_params: dict
 
 
 class ResponseLike(Protocol):

@@ -36,6 +36,7 @@ class ExecuteCase:
     # 带默认值的字段必须放最后，否则 dataclass 报 non-default argument follows default
     extracts: dict = field(default_factory=dict)
     db_validations: list = field(default_factory=list)
+    path_params: dict = field(default_factory=dict)
 
     @classmethod
     def from_model(cls, case_model: CaseModel) -> "list[ExecuteCase]":
@@ -45,12 +46,14 @@ class ExecuteCase:
                 api_name=api.api_name,
                 url=api.url,
                 method=api.method,
-                headers=api.headers,
+                # 用例级 headers 覆盖接口级 —— 同一个接口，鉴权常常因用例而异
+                headers={**api.headers, **c.headers},
                 case_name=c.case_name,
                 data=c.data,
                 validations=c.validations,
                 extracts=c.extracts,
                 db_validations=c.db_validations,
+                path_params=c.path_params,
             )
             for c in case_model.cases
         ]

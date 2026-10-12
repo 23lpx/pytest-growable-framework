@@ -54,6 +54,7 @@ class ResolvedCase:
     validations: list
     extracts: dict
     db_validations: list
+    path_params: dict
 
 
 def _resolve_one(expr: str, context: Context) -> Any:
@@ -109,7 +110,8 @@ def resolve_case(case: CaseLike, context: Context) -> ResolvedCase:
     """把「要发出去的东西」（url / headers / data）里的占位符解析成实际值。
 
     validations / extracts 是规则不是数据，原样带过去，不解析；
-    db_validations **要**解析 —— 里面的 where 条件值常常是变量（如 ${user_id}）。
+    db_validations **要**解析 —— 里面的 where 条件值常常是变量（如 ${user_id}）；
+    path_params 也要解析 —— 它的值同样可能是变量（如 {accountNo} 填 ${account_no}）。
     """
     return ResolvedCase(
         api_name=case.api_name,
@@ -121,4 +123,5 @@ def resolve_case(case: CaseLike, context: Context) -> ResolvedCase:
         validations=case.validations,
         extracts=case.extracts,
         db_validations=resolve_value(case.db_validations, context),
+        path_params=resolve_value(case.path_params, context),
     )

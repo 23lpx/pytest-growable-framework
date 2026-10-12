@@ -18,9 +18,15 @@ class TestCase:
     case_name: str
     data: dict
     validations: list
-    # 带默认值的字段必须放最后（dataclass 的规则）；老 yaml 不写 extract / db 就是空
+    # 带默认值的字段必须放最后（dataclass 的规则）；老 yaml 不写 extract / db / path_params 就是空
     extracts: dict = field(default_factory=dict)
     db_validations: list = field(default_factory=list)
+    # 路径参数：把 url 里的 {占位符} 换成值。见 RequestHandler._build_path
+    path_params: dict = field(default_factory=dict)
+    # 用例级请求头：**覆盖**接口级同名项。同一个接口的用例，鉴权往往不同 ——
+    # 「正常」带 A 的 token、「越权」带 B 的、「未登录」干脆不带，
+    # 光靠接口级的 base_info.headers 表达不了。
+    headers: dict = field(default_factory=dict)
 
 
 class CaseModel:
@@ -85,6 +91,8 @@ class CaseModel:
                     validations=case['validation'],
                     extracts=self._parse_extracts(case),
                     db_validations=self._parse_db(case),
+                    path_params=self._parse_path_params(case),
+                    headers=self._parse_headers(case),
                 ))
         except (KeyError, TypeError) as e:
             raise CaseParseError(f"用例结构不符合规范，字段缺失或类型不对: {e}") from e
@@ -113,3 +121,22 @@ class CaseModel:
         if not isinstance(db_validations, list):
             raise CaseParseError(f"db 必须是列表: {db_validations!r}")
         return db_validations
+
+    @staticmethod
+    def _parse_path_params(case: dict) -> dict:
+        """取用例的 path_params 段（占位符名 -> 值）。
+
+        形状不对要在**解析期**暴露 —— 同 _parse_db。老 yaml 不写就是空 dict。
+        """
+        path_params = case.get('path_params', {})
+        if not isinstance(path_params, dict):
+            raise CaseParseError(f"path_params 必须是键值对: {path_params!r}")
+        return path_params
+
+    @staticmethod
+    def _parse_headers(case: dict) -> dict:
+        """取用例级请求头（可选，覆盖接口级同名项）。老 yaml 不写就是空。"""
+        headers = case.get('headers', {})
+        if not isinstance(headers, dict):
+            raise CaseParseError(f"用例级 headers 必须是键值对: {headers!r}")
+        return headers

@@ -23,3 +23,30 @@ db:
   user: root
   password: CHANGE_ME_DB_PWD
   database: demo
+
+# 第二个被测系统：商用短链平台（Java / Spring Cloud）。
+# 和上面的 flaskServer **并存** —— 两套用例靠「目录 + 客户端」分开：
+#   flaskServer → data/api/      ，用 client  fixture（base_url 取上面的）
+#   短链平台    → data/api_shortlink/，用 shortlink_client fixture（取这里的）
+# 两边的 token 机制也不同：flaskServer 把 token 当表单参数，短链平台放请求头。
+shortlink:
+  base_url: http://TEST_GATEWAY_HOST:8888     # 经网关，服务不对外直连
+  # 测试账号：开发预先建好的，不走注册（注册要短信验证码）
+  phone: "13800000000"
+  pwd: CHANGE_ME_PWD
+
+# 日志脱敏 —— 「哪一档」和「凭证长什么样」都随环境变，所以归配置。
+#
+# 按环境分档（现在在测试档）：
+#   开发：不打码，看原值最方便
+#   测试：脱敏（默认）
+#   生产：应该更严 —— 不让敏感值落盘，而不是"落了再打码"（待实现）
+masking:
+  mode: mask            # mask=脱敏 / off=不打码
+  # 按「值的长相」打码：有些系统把凭证塞在普通字段名里（如 data），
+  # 光靠字段名匹配会漏。每个被测系统在这里声明自己的凭证长相。
+  #
+  # 短链平台的登录 token 形如：dcloud-link + JWT
+  # （flaskServer 的 token 是纯随机串、没有前缀，所以那边靠字段名 token 就能命中）
+  value_patterns:
+    - '^dcloud-link'

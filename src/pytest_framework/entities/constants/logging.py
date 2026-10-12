@@ -21,8 +21,25 @@ class LogConfig:
     LOG_FILE = "app.log"
 
 
+class MaskMode:
+    """脱敏档位 —— 按环境切换（谁在哪一档由 config 的 masking.mode 决定）。
+
+    分档的理由：本地开发看原值最方便，测试环境要防泄露，生产环境该更严。
+    """
+
+    MASK = "mask"   # 脱敏（默认）
+    OFF = "off"     # 不打码 —— 只该在本地开发用
+
+
 class MaskConfig:
-    """脱敏配置。命中名单的字段在**进日志前**被打码，原始数据不动。"""
+    """脱敏配置常量。命中名单的字段在**进日志前**被打码，原始数据不动。"""
+
+    # 默认档位。实际以 config 的 masking.mode 为准（conftest 加载配置后覆盖）
+    DEFAULT_MODE = MaskMode.MASK
+
+    # 按「值的长相」打码的默认规则 —— 空表示只按字段名判。
+    # 真正的规则来自 config：不同被测系统的凭证长相不同，框架不该认识具体的系统。
+    DEFAULT_VALUE_PATTERNS: tuple[str, ...] = ()
 
     # 子串匹配（大小写不敏感），所以 access_token / phoneNumber 这类也会命中
     SENSITIVE_KEYS = (

@@ -7,6 +7,7 @@ from requests.exceptions import RequestException
 
 from pytest_framework.entities.constants.http import Header, HttpParam
 from pytest_framework.entities.exception.errors import RequestError
+from pytest_framework.infrastructure.logging.masking import mask
 
 logger = logging.getLogger(__name__)
 
@@ -82,11 +83,21 @@ class HttpClient:
 
     @staticmethod
     def _brief_body(resp: Response) -> str:
-        """响应体：能当 JSON 解析就缩进打，否则截断 —— 避免一长串挤在一行看不清。"""
+        """响应体：能当 JSON 解析就缩进打，否则截断 —— 避免一长串挤在一行看不清。
+
+        ⚠️ **先脱敏、再序列化**，顺序不能反：一旦 `json.dumps` 成字符串，脱敏层
+        看到的就是一整块文本（不再是 dict），「按字段名」和「按值特征」两条路
+        就全断了 —— 响应里藏着的凭证会明文落盘。这里是最典型的例子：短链平台
+        把登录 token 装在 `data` 字段里，序列化后就再也认不出来。
+
+        （正常情况下脱敏由日志层的 record 工厂兜住，不需要调用点操心；这里是
+         例外，因为**序列化本身**把结构毁了，只能在这儿补一刀。）
+        """
         try:
-            return json.dumps(resp.json(), ensure_ascii=False, indent=2)
+            body = resp.json()
         except ValueError:
             return resp.text[:1000]
+        return json.dumps(mask(body), ensure_ascii=False, indent=2)
 
     def get(self, path: str, **kwargs) -> Response:
         return self.request("GET", path, **kwargs)

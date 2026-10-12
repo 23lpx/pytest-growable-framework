@@ -1,5 +1,8 @@
+from urllib.parse import quote
+
 from pytest_framework.entities.constants.http import Header, HttpMethod, HttpParam
 from pytest_framework.entities.contracts import CaseLike, ResponseLike
+from pytest_framework.entities.exception.errors import RequestError
 from pytest_framework.ports.sender import Sender
 
 
@@ -30,10 +33,37 @@ class RequestHandler:
     def send(self, case: CaseLike) -> ResponseLike:
         return self.client.request(
             method=case.method,
-            path=case.url,
+            path=self._build_path(case),
             headers=case.headers,
             **self._pick_param_slot(case),
         )
+
+    @staticmethod
+    def _build_path(case: CaseLike) -> str:
+        """把路径参数填进 url 的 `{占位符}`。
+
+        yaml 里 url 写 `/api/group/v1/detail/{groupId}`，用例给
+        `path_params: {groupId: 123}` → 拼出 `/api/group/v1/detail/123`。
+
+        **为什么不复用 `${}` 那套变量池**：变量池是 session 级共享的，而路径参数
+        几乎每条用例都不同（查自己的分组 / 查不存在的 id / 查别人的），塞进共享池
+        会互相污染 —— 前一条写进去的值后一条还在。`path_params` 是「这一条用例
+        自己的」，作用域正好。它内部**仍可用 `${}`**（由 replacer 先解析），
+        所以两种机制是叠加的，不是二选一：`{groupId}: "${group_id}"` 也成立。
+
+        值做 URL 编码：路径参数可能是 `-1`、`abc`，也可能是注入串
+        （`' OR '1'='1`），直接拼进 url 会破坏路径结构。
+        """
+        path = case.url
+        for name, value in case.path_params.items():
+            path = path.replace("{" + name + "}", quote(str(value), safe=""))
+
+        # 填完还有 {xxx} 说明用例漏给了参数 —— 早点喊，别让它带着一个不可能
+        # 匹配的 url 发出去（那种失败只会得到个 404，看不出是数据没填）
+        if "{" in path:
+            raise RequestError(f"路径参数没填全，url 里仍残留占位符: {path}")
+
+        return path
 
     @staticmethod
     def _pick_param_slot(case: CaseLike) -> dict:

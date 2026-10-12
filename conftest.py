@@ -11,6 +11,7 @@ from pytest_framework.infrastructure.db import MySqlExecutor
 from pytest_framework.adapters.config import Config
 from pytest_framework.entities.context.context import Context
 from pytest_framework.infrastructure.logging.logger import init_logger
+from pytest_framework.infrastructure.logging.masking import configure_masking
 from pytest_framework.infrastructure.path import _project_root
 from pytest_framework.entities.model.case_model import CaseModel
 from pytest_framework.usecases.case_runner import CaseRunner
@@ -18,6 +19,9 @@ from pytest_framework.usecases.case_runner import CaseRunner
 init_logger()
 
 LOGIN_CASES = '/data/api/login_cases.yaml'
+
+# 第二个被测系统（短链平台）的登录用例 —— 和上面那个分开，两边 token 机制不同
+SHORTLINK_LOGIN_CASES = '/data/api_shortlink/login_post_account_login.yaml'
 
 # allure 的约定（插件注册的选项名 + 它认的文件名）—— 不是我们定的，所以是常量而非魔法值
 ALLURE_DIR_OPTION = '--alluredir'
@@ -50,8 +54,17 @@ def config() -> Config:
     加载完就定死：之后只读，跑的过程中不再变（所以要换环境只能重跑）。
 
     加载失败（文件没了 / 格式错）抛 ConfigError —— 配置坏了是硬错误，让它喊出来。
+
+    顺手把**脱敏配置**喂给日志层：值特征随被测系统变（短链平台的 token 长什么样，
+    flaskServer 的 token 长什么样，各不一样），归配置最合适。放在这里而不是模块
+    导入时读，是为了让 `pytest tests/` 跑框架单测时压根不碰配置文件。
     """
-    return Config.load()
+    cfg = Config.load()
+    configure_masking(
+        mode=cfg.get("masking.mode"),
+        value_patterns=cfg.get("masking.value_patterns") or [],
+    )
+    return cfg
 
 
 @pytest.fixture(scope='session')
@@ -103,6 +116,38 @@ def login(context: Context, client: HttpClient) -> None:
     """
     login_case = ExecuteCase.from_model(CaseModel(LOGIN_CASES))[0]
     CaseRunner(client, context).run(login_case)
+
+
+# ---------- 第二个被测系统：商用短链平台 ----------
+@pytest.fixture(scope='session')
+def shortlink_client(config: Config) -> Iterator[HttpClient]:
+    """短链平台专用客户端。
+
+    **为什么不复用 `client`**：那个的 base_url 是 flaskServer。两个被测系统同时
+    存在，各自一个客户端、各自一个 base_url，互不干扰 —— 和「一套变量池挂不同
+    父级」是同一个思路：共用的是机制，分开的是数据。
+
+    session 级同样是为了连接复用。
+    """
+    http = HttpClient(
+        config.get("shortlink.base_url"), timeout=config.get("http.timeout")
+    )
+    yield http
+    http.close()
+
+
+@pytest.fixture(scope='session')
+def shortlink_login(shortlink_client: HttpClient, context: Context) -> None:
+    """短链平台登录：整个会话只登一次，token 写进变量池。
+
+    和 flaskServer 的 `login` fixture 是**同一个套路**（跑一条带 extract 的用例），
+    但走的是**不同的客户端**和**不同的登录接口**。
+
+    ⚠️ 短链平台的 token 放**请求头**（`token: <JWT>`），不是表单参数 ——
+    所以用例里要写成 `headers: {token: "${token}"}`。
+    """
+    login_case = ExecuteCase.from_model(CaseModel(SHORTLINK_LOGIN_CASES))[0]
+    CaseRunner(shortlink_client, context).run(login_case)
 
 
 @pytest.fixture(scope='session')
