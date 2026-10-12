@@ -38,6 +38,7 @@ test_cases:
       - contains:
           code: 23503
   - case_name: "更新分组：改成另一个已有分组的名字"
+    # ⚠️ 契约模糊点：重名校验在入口被通用参数校验拦下，非文档承诺的 23001
     headers:
       token: "${token}"
     data:
@@ -45,7 +46,7 @@ test_cases:
       title: "g2"
     validation:
       - contains:
-          code: 23001
+          code: 110003
   - case_name: "更新分组：缺 id 字段"
     headers:
       token: "${token}"

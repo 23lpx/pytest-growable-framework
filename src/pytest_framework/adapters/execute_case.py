@@ -37,6 +37,8 @@ class ExecuteCase:
     extracts: dict = field(default_factory=dict)
     db_validations: list = field(default_factory=list)
     path_params: dict = field(default_factory=dict)
+    # 已知缺陷原因（非空 = 消费方该挂 xfail）。见 TestCase.xfail
+    xfail: str = ""
 
     @classmethod
     def from_model(cls, case_model: CaseModel) -> "list[ExecuteCase]":
@@ -54,6 +56,7 @@ class ExecuteCase:
                 extracts=c.extracts,
                 db_validations=c.db_validations,
                 path_params=c.path_params,
+                xfail=c.xfail,
             )
             for c in case_model.cases
         ]

@@ -32,6 +32,7 @@ test_cases:
       - contains:
           code: 23404
   - case_name: "删除分组：重复删除已删的分组"
+    xfail: "已知缺陷：返回 -1，应为 23404"
     headers:
       token: "${token}"
     path_params:
@@ -52,6 +53,7 @@ test_cases:
       - contains:
           code: 23404
   - case_name: "删除分组：id 非数字"
+    xfail: "已知缺陷：同「分组详情：id 非数字」"
     headers:
       token: "${token}"
     path_params:

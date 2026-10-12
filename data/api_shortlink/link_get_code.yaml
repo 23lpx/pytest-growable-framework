@@ -12,6 +12,7 @@ base_info:
 
 test_cases:
   - case_name: "跳转：已存在的短链"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "{code}"
     data:
@@ -20,6 +21,7 @@ test_cases:
       - contains:
           code: (非 JsonData)
   - case_name: "跳转：Location 头等于原始长链"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "{code}"
     data:
@@ -28,6 +30,7 @@ test_cases:
       - contains:
           code: (非 JsonData)
   - case_name: "跳转：不存在的短链码"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "nonexist123"
     data:
@@ -36,6 +39,7 @@ test_cases:
       - contains:
           code: (非 JsonData)
   - case_name: "跳转：首位非法（库标识校验）"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "zzz999"
     data:
@@ -44,6 +48,7 @@ test_cases:
       - contains:
           code: (非 JsonData)
   - case_name: "跳转：末位非法（表标识校验）"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "aaaaaa"
     data:
@@ -52,6 +57,7 @@ test_cases:
       - contains:
           code: (非 JsonData)
   - case_name: "跳转：短链码含非法字符（横杠）"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "a1-2b"
     data:
@@ -60,6 +66,7 @@ test_cases:
       - contains:
           code: (非 JsonData)
   - case_name: "跳转：已逻辑删除的短链"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "{deleted_code}"
     data:
@@ -68,6 +75,7 @@ test_cases:
       - contains:
           code: (非 JsonData)
   - case_name: "跳转：已过期的短链"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "{expired_code}"
     data:
@@ -76,6 +84,7 @@ test_cases:
       - contains:
           code: (非 JsonData)
   - case_name: "跳转：state 非 ACTIVE"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "{locked_code}"
     data:
@@ -84,6 +93,7 @@ test_cases:
       - contains:
           code: (非 JsonData)
   - case_name: "删除：删后跳转应 404（端到端）"
+    xfail: "框架缺口：C 端跳转响应是 302/404 重定向，不是 JsonData，现有断言体系覆盖不了"
     path_params:
       code: "{deleted_code}"
     data:

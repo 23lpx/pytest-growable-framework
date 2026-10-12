@@ -7,6 +7,24 @@ from pytest_framework.entities.context.context import Context
 from pytest_framework.usecases.case_runner import CaseRunner
 
 
+def _params() -> list:
+    """把用例转成 pytest 参数；声明了 xfail 的挂上标记。
+
+    `strict=True` 是有意的：这条是「已知缺陷、判据正确」，所以**红了算预期**；
+    可一旦哪天被测系统把它修好了，用例会变绿 → pytest 报 **XPASS 失败** →
+    提醒你回来把 yaml 里的 xfail 摘掉。**不摘就红**，缺陷不会悄悄溜走。
+    """
+    params = []
+    for case in ExecuteCase.discover("data/api_shortlink"):
+        marks = (
+            [pytest.mark.xfail(reason=case.xfail, strict=True)] if case.xfail else []
+        )
+        params.append(
+            pytest.param(case, marks=marks, id=f"{case.api_name}:{case.case_name}")
+        )
+    return params
+
+
 @allure.feature("短链平台")
 class TestShortLink:
     """商用短链平台的单接口用例 —— **框架的第二个被测系统**。
@@ -21,11 +39,7 @@ class TestShortLink:
     短链平台的用例照样能跑）。
     """
 
-    @pytest.mark.parametrize(
-        "case",
-        ExecuteCase.discover("data/api_shortlink"),
-        ids=lambda c: f"{c.api_name}:{c.case_name}",
-    )
+    @pytest.mark.parametrize("case", _params())
     def test_shortlink(
         self,
         case: ExecuteCase,
@@ -35,3 +49,4 @@ class TestShortLink:
     ) -> None:
         allure.dynamic.story(case.api_name)
         CaseRunner(shortlink_client, context).run(case)
+

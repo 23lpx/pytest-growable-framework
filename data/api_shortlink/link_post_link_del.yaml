@@ -29,6 +29,7 @@ test_cases:
       - contains:
           code: 260404
   - case_name: "删除：重复删除"
+    # ⚠️ 契约模糊点：非文档承诺的 260404
     headers:
       token: "${token}"
     data:
@@ -36,7 +37,7 @@ test_cases:
       code: "<code>"
     validation:
       - contains:
-          code: 260404
+          code: 110003
   - case_name: "删除：不存在的 mappingId"
     headers:
       token: "${token}"

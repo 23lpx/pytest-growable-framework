@@ -62,6 +62,7 @@ test_cases:
       - contains:
           code: 23404
   - case_name: "分组详情：id 非数字"
+    xfail: "已知缺陷：路径参数类型错误未兜住，返回 -1（应为 110003）"
     headers:
       token: "${token}"
     path_params:
@@ -72,6 +73,7 @@ test_cases:
       - contains:
           code: 110003
   - case_name: "分组详情：id 超出 bigint 范围"
+    xfail: "已知缺陷：同「id 非数字」，返回 -1（应为 110003）"
     headers:
       token: "${token}"
     path_params:
@@ -90,6 +92,7 @@ test_cases:
       - contains:
           code: 250004
   - case_name: "安全-SQL注入：路径参数 id 传注入串"
+    xfail: "已知缺陷：返回 -1（应为 110003）"
     headers:
       token: "${token}"
     path_params:

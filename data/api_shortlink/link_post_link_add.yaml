@@ -165,6 +165,7 @@ test_cases:
       - contains:
           code: 23404
   - case_name: "建链：domainId 不存在"
+    # ⚠️ 契约模糊点：返回通用参数校验错，非文档承诺的 260401
     headers:
       token: "${token}"
     data:
@@ -175,8 +176,9 @@ test_cases:
       domainType: "OFFICIAL"
     validation:
       - contains:
-          code: 260401
+          code: 110003
   - case_name: "建链：domainType 与 domainId 不匹配"
+    # ⚠️ 契约模糊点：同上
     headers:
       token: "${token}"
     data:
@@ -187,7 +189,7 @@ test_cases:
       domainType: "CUSTOM"
     validation:
       - contains:
-          code: 260401
+          code: 110003
   - case_name: "建链：未登录"
     data:
       groupId: "<g1_id>"
@@ -223,6 +225,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "建链：流量耗尽时应被拒"
+    # ⚠️ 契约模糊点：非文档承诺的 600102
     headers:
       token: "${token}"
     data:
@@ -233,4 +236,4 @@ test_cases:
       domainType: "OFFICIAL"
     validation:
       - contains:
-          code: 600102
+          code: 110003

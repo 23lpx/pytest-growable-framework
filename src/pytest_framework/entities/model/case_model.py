@@ -27,6 +27,10 @@ class TestCase:
     # 「正常」带 A 的 token、「越权」带 B 的、「未登录」干脆不带，
     # 光靠接口级的 base_info.headers 表达不了。
     headers: dict = field(default_factory=dict)
+    # 已知缺陷标记：填了原因就表示「这条现在注定不过，但**判据本身是对的**」。
+    # 消费方（cases/）据此挂 pytest 的 xfail —— 它红了不算失败，而哪天被修好，
+    # pytest 会以 XPASS 提醒你把标记摘掉。不填就是正常用例。
+    xfail: str = ""
 
 
 class CaseModel:
@@ -93,6 +97,7 @@ class CaseModel:
                     db_validations=self._parse_db(case),
                     path_params=self._parse_path_params(case),
                     headers=self._parse_headers(case),
+                    xfail=str(case.get('xfail', '') or ''),
                 ))
         except (KeyError, TypeError) as e:
             raise CaseParseError(f"用例结构不符合规范，字段缺失或类型不对: {e}") from e

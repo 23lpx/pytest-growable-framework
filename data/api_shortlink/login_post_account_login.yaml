@@ -92,7 +92,7 @@ test_cases:
       - contains:
           code: 250002
   - case_name: "手机号校验：传 number 而非 string"
-    # ⚠️ 契约模糊点：文档要求 phone 为 string，服务端(Jackson)宽松接受 number。按实测记录行为，属「输入校验不严格」
+    # ⚠️ 契约模糊点：文档要求 phone 为 string，服务端(Jackson)宽松接受 number
     data:
       phone: 13800000000
       pwd: "${shortlink.pwd}"

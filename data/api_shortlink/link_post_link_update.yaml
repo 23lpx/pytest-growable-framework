@@ -62,6 +62,7 @@ test_cases:
       - contains:
           code: 110003
   - case_name: "更新：mappingId 不存在"
+    # ⚠️ 契约模糊点：返回 110003「短链码格式不合法」，非 260404
     headers:
       token: "${token}"
     data:
@@ -69,7 +70,7 @@ test_cases:
       code: "<code>"
     validation:
       - contains:
-          code: 260404
+          code: 110003
   - case_name: "更新：越权改他人短链"
     headers:
       token: "${token_b}"

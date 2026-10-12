@@ -123,6 +123,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "创建分组：title 长度 256（超上限 1 字节）"
+    xfail: "已知缺陷：超长漏到数据库层，返回 -1（应为 110003）"
     headers:
       token: "${token}"
     data:
@@ -257,6 +258,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "协议层：Content-Type 改为 text/plain"
+    xfail: "已知缺陷：返回 -1（应为 110003）"
     headers:
       Content-Type: "text/plain"
       token: "${token}"
