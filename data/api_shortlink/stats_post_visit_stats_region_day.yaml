@@ -1,0 +1,116 @@
+# 商用短链平台 · stats 域 —— POST /data-server/api/visit_stats/v1/region_day
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+base_info:
+  api_name: stats-region_day
+  url: '/data-server/api/visit_stats/v1/region_day'
+  method: POST
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "地区分布：正常查询（1 天）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      startTime: "20261005"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "跨度闸：边界正好 30 天"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      startTime: "20260905"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "跨度闸：超一 31 天"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      startTime: "20260904"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 400002
+  - case_name: "跨度闸：日期格式非法（斜杠分隔）"
+    xfail: "已知缺陷：返回 -1（应为 110003）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      startTime: "2026/09/01"
+      endTime: "2026/10/05"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "地区分布：反向区间（start 晚于 end）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      startTime: "20261005"
+      endTime: "20260905"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "地区分布：缺 code"
+    headers:
+      token: "${token}"
+    data:
+      startTime: "20261005"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "地区分布：缺 startTime"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "地区分布：缺 endTime"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      startTime: "20261005"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "地区分布：空请求体（多字段同时失败）"
+    headers:
+      token: "${token}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "地区分布：未登录"
+    data:
+      code: "<code>"
+      startTime: "20261005"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 250004
+  - case_name: "数据正确性：地区/设备分布不为空"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      startTime: "20261005"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 0

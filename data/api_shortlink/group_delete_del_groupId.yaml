@@ -1,0 +1,84 @@
+# 商用短链平台 · group 域 —— DELETE /link-server/api/group/v1/del/{groupId}
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+# 路径参数 {groupId} 由每条用例的 path_params 填。
+base_info:
+  api_name: group-{groupId}
+  url: '/link-server/api/group/v1/del/{groupId}'
+  method: DELETE
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "删除分组：正常删除"
+    headers:
+      token: "${token}"
+    path_params:
+      groupId: "${g1_id}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 0
+  - case_name: "删除分组：越权删他人分组"
+    xfail: "缺测试账号：需要第二个账号才能验越权（测试环境未提供）"
+    headers:
+      token: "${token_b}"
+    path_params:
+      groupId: "${g1_id}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 23404
+  - case_name: "删除分组：重复删除已删的分组"
+    headers:
+      token: "${token}"
+    path_params:
+      groupId: "${g1_id}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 23404
+  - case_name: "删除分组：不存在的 id"
+    headers:
+      token: "${token}"
+    path_params:
+      groupId: "999999999"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 23404
+  - case_name: "删除分组：id 非数字"
+    xfail: "已知缺陷：同「分组详情：id 非数字」"
+    headers:
+      token: "${token}"
+    path_params:
+      groupId: "abc"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "删除分组：未登录"
+    path_params:
+      groupId: "1"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 250004
+  - case_name: "删除分组：删组不影响组下已建的短链"
+    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+    headers:
+      token: "${token}"
+    path_params:
+      groupId: "${g1_id}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 0

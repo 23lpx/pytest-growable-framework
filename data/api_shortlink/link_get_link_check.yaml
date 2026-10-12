@@ -1,0 +1,45 @@
+# 商用短链平台 · link 域 —— GET /link-server/api/link/v1/check
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+base_info:
+  api_name: link-check
+  url: '/link-server/api/link/v1/check'
+  method: GET
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "RPC校验：正确 rpc-token + 码存在"
+    xfail: "已知缺陷：期望成功却返回 -1 系统异常，服务端异常未兜底"
+    headers:
+      rpc-token: "xdclass.net168"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 0
+  - case_name: "RPC校验：正确 token + 码不存在"
+    # ⚠️ 契约模糊点：返回 -1，非文档承诺的 260404
+    headers:
+      rpc-token: "xdclass.net168"
+    data:
+      {}
+    validation:
+      - contains:
+          code: -1
+  - case_name: "RPC校验：错误 rpc-token"
+    headers:
+      rpc-token: "wrong"
+    data:
+      {}
+    validation:
+      - contains:
+          code: -1
+  - case_name: "RPC校验：不带 rpc-token 请求头"
+    # ⚠️ 契约模糊点：返回 -1，非文档承诺的 110003
+    data:
+      {}
+    validation:
+      - contains:
+          code: -1

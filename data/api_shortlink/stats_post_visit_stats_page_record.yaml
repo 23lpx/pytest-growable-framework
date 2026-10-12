@@ -1,0 +1,170 @@
+# 商用短链平台 · stats 域 —— POST /data-server/api/visit_stats/v1/page_record
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+base_info:
+  api_name: stats-page_record
+  url: '/data-server/api/visit_stats/v1/page_record'
+  method: POST
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "访问记录：正常分页查询"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 1
+      size: 10
+    validation:
+      - contains:
+          code: 0
+  - case_name: "条数闸：边界 page=10 size=100（正好 1000）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 10
+      size: 100
+    validation:
+      - contains:
+          code: 0
+  - case_name: "条数闸：超一 page=11 size=100（1100）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 11
+      size: 100
+    validation:
+      - contains:
+          code: 400001
+  - case_name: "条数闸：整数溢出 page=2147483647 size=100"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 2147483647
+      size: 100
+    validation:
+      - contains:
+          code: 400001
+  - case_name: "条数闸：另一个大 page（999999999）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 999999999
+      size: 100
+    validation:
+      - contains:
+          code: 400001
+  - case_name: "访问记录：缺 code"
+    headers:
+      token: "${token}"
+    data:
+      page: 1
+      size: 10
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "访问记录：code 空字符串"
+    headers:
+      token: "${token}"
+    data:
+      code: ""
+      page: 1
+      size: 10
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "访问记录：page=0（下界外）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 0
+      size: 10
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "访问记录：page=-1（负数）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: -1
+      size: 10
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "访问记录：size=0（下界外）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 1
+      size: 0
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "访问记录：size=100（@Max 上界内）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 1
+      size: 100
+    validation:
+      - contains:
+          code: 0
+  - case_name: "访问记录：size=101（超 @Max 一）"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 1
+      size: 101
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "访问记录：未登录"
+    data:
+      code: "<code>"
+      page: 1
+      size: 10
+    validation:
+      - contains:
+          code: 250004
+  - case_name: "租户隔离：B 查 A 的短链统计（对照组必须有数据）"
+    xfail: "缺测试账号：需要第二个账号才能验越权（测试环境未提供）"
+    headers:
+      token: "${token_b}"
+    data:
+      code: "<A的code>"
+      page: 1
+      size: 10
+    validation:
+      - contains:
+          code: 0
+  - case_name: "租户隔离：同一账号可查到自己的数据"
+    headers:
+      token: "${token}"
+    data:
+      code: "<A的code>"
+      page: 1
+      size: 10
+    validation:
+      - contains:
+          code: 0
+  - case_name: "数据正确性：跳转 N 次后访问记录条数"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      page: 1
+      size: 100
+    validation:
+      - contains:
+          code: 0

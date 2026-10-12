@@ -1,0 +1,53 @@
+base_info:
+  api_name: 用户登录
+  url: '/dar/user/login'
+  method: POST
+  headers:
+    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+
+test_cases:
+  - case_name: 用户名密码正确登录
+    data:
+      # 账号密码来自 config/config.yaml，换环境不用改用例
+      user_name: ${login.username}
+      passwd: ${login.password}
+    validation:
+      - contains:
+          msg: 登录成功
+      - contains:
+          msg_code: 200
+    # 提取出来给后续接口用：${token} 就能取到
+    extract:
+      token: $.token
+      user_id: $.userId
+
+  - case_name: 密码错误
+    data:
+      user_name: test01
+      passwd: wrong
+    validation:
+      - contains:
+          msg: 登录失败,用户名或密码错误
+      - contains:
+          msg_code: 9001
+
+  - case_name: 账号不存在
+    data:
+      user_name: nobody
+      # 这条测的是用户名不存在，密码用啥都行 —— 别写真的，免得明文密码在仓库里多一处
+      passwd: whatever
+    validation:
+      - contains:
+          msg: 登录失败,用户名或密码错误
+      - contains:
+          msg_code: 9001
+
+  - case_name: 密码为空
+    data:
+      user_name: test01
+      passwd: ""
+    validation:
+      - contains:
+          msg: 参数错误
+      - contains:
+          msg_code: -1

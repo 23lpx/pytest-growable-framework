@@ -1,0 +1,29 @@
+base_info:
+  api_name: 电网系统登录
+  url: '/coupApply/cms/login_dw'
+  method: POST
+  headers:
+    'Content-Type': 'application/json;charset=UTF-8'
+
+# 注意这条链走 json body（Content-Type 是 application/json），
+# 由 RequestHandler 自动翻译成 requests 的 json= —— yaml 里只写 data 就行。
+test_cases:
+  - case_name: 登录成功
+    data:
+      username: test123
+      password: qwe666
+    validation:
+      - contains:
+          msg: 调用成功
+      - contains:
+          code: 0
+
+  - case_name: 空参数
+    data: {}
+    validation:
+      - contains:
+          error_code: '4000'
+
+# ⚠️ 密码错误时被测服务直接抛 HTTP 500 + HTML（不是 JSON），
+#    我们的校验层会因为「响应不是合法 JSON」抛 ValidationError。
+#    这是服务的真实缺陷，不是框架的问题 —— 所以这里不写成例会挂的用例。

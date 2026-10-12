@@ -1,0 +1,109 @@
+base_info:
+  api_name: 修改用户
+  url: '/dar/user/updateUser'
+  method: POST
+  headers:
+    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+
+# ⚠️ 实测结论：本接口是**固定值匹配**（改任何一位都返回「更新失败」），
+#    所以「正常」用例只能用这一套原值，换个 phone 都会挂。
+#    这不是我们在凑数据，是被测服务的真实行为 —— 数据驱动下如实记录即可。
+test_cases:
+  - case_name: 正常修改用户信息
+    data:
+      username: testadduser
+      password: 'tset6789#$123'
+      role_id: 89588181111112343
+      dates: '2023-12-31'
+      phone: 13800000000
+    validation:
+      - contains:
+          msg: 更新成功
+      - contains:
+          msg_code: 200
+
+  - case_name: 缺少必填参数 username
+    data:
+      password: 'tset6789#$123'
+      role_id: 89588181111112343
+      dates: '2023-12-31'
+      phone: 13800000000
+    validation:
+      - contains:
+          msg: 更新失败
+      - contains:
+          msg_code: 9001
+
+  - case_name: 缺少必填参数 password
+    data:
+      username: testadduser
+      role_id: 89588181111112343
+      dates: '2023-12-31'
+      phone: 13800000000
+    validation:
+      - contains:
+          msg: 更新失败
+      - contains:
+          msg_code: 9001
+
+  - case_name: 缺少必填参数 role_id
+    data:
+      username: testadduser
+      password: 'tset6789#$123'
+      dates: '2023-12-31'
+      phone: 13800000000
+    validation:
+      - contains:
+          msg: 更新失败
+      - contains:
+          msg_code: 9001
+
+  - case_name: 缺少必填参数 dates
+    data:
+      username: testadduser
+      password: 'tset6789#$123'
+      role_id: 89588181111112343
+      phone: 13800000000
+    validation:
+      - contains:
+          msg: 更新失败
+      - contains:
+          msg_code: 9001
+
+  - case_name: 缺少必填参数 phone
+    data:
+      username: testadduser
+      password: 'tset6789#$123'
+      role_id: 89588181111112343
+      dates: '2023-12-31'
+    validation:
+      - contains:
+          msg: 更新失败
+      - contains:
+          msg_code: 9001
+
+  - case_name: role_id 位数不合法
+    data:
+      username: testadduser
+      password: 'tset6789#$123'
+      role_id: 123456789
+      dates: '2023-12-31'
+      phone: 13800000000
+    validation:
+      - contains:
+          msg: 更新失败
+      - contains:
+          msg_code: 9001
+
+  - case_name: username 为空串
+    data:
+      username: ''
+      password: 'tset6789#$123'
+      role_id: 89588181111112343
+      dates: '2023-12-31'
+      phone: 13800000000
+    validation:
+      - contains:
+          msg: 更新失败
+      - contains:
+          msg_code: 9001

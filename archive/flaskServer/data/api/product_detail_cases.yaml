@@ -1,0 +1,38 @@
+base_info:
+  api_name: 商品详情
+  url: '/coupApply/cms/productDetail'
+  method: POST
+  headers:
+    'Content-Type': 'application/json;charset=UTF-8'
+
+# pro_id 用商品列表里真实存在的 goodsId（18382788819），保证正向用例稳定。
+test_cases:
+  - case_name: 获取商品详情成功
+    data:
+      pro_id: '18382788819'
+      page: 1
+      size: 20
+    validation:
+      - contains:
+          error_code: '0000'
+
+  - case_name: pro_id 不存在
+    data:
+      pro_id: '00000000000'
+      page: 1
+      size: 20
+    validation:
+      - contains:
+          error_code: '4000'
+      - contains:
+          error: 不存在该商品
+
+  - case_name: 缺少必填参数 pro_id
+    data:
+      page: 1
+      size: 20
+    validation:
+      - contains:
+          error_code: '4000'
+      - contains:
+          error: 不存在该商品

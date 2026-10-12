@@ -1,0 +1,14 @@
+# 框架单测**专用**配置 —— 和生产的 config/config.yaml 解耦：
+# 这边怎么改都不影响那边，反之亦然。
+#
+# 为什么单测不直接读生产配置（tests/test_config.py 的 TestEnvOverlay）：
+# 那会让「改一下生产配置」把单测带崩（断言绑在真实值上），
+# 于是「框架单测零依赖」就成了空话。
+base_url: http://127.0.0.1:8787
+
+http:
+  timeout: 10
+
+login:
+  username: test01
+  password: admin123

@@ -1,0 +1,29 @@
+base_info:
+  api_name: 查库校验
+  url: '/dar/user/queryUser'
+  method: POST
+  headers:
+    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+
+# ⚠️ 这是**链路演示**用例，别当成正经业务用例看：
+#    接口打的是 flaskServer（内存 mock，压根没有库），查的是 docker 起的 demo 库 ——
+#    两边数据是各自准备的，只是语义上凑成一致。
+#    真实项目里两边是同一套数据源，那时这个文件就是正经用例了。
+test_cases:
+  - case_name: 接口说查到了，库里确认真有
+    data:
+      user_id: 123839387391912
+    validation:
+      - contains:
+          msg: 查询成功!
+      - contains:
+          msg_code: 200
+    # db 段：查库校验。yaml 里**不写 SQL**，只写「查哪张表、什么条件、期望什么」。
+    # where 的值可以引变量 —— 这里引的是 `login` fixture 从**登录响应**提取的 user_id：
+    # 「接口说我是谁」→「库里核对是不是真有这个人」。值不写死 = 数据驱动的那一半。
+    db:
+      - table: user
+        where:
+          user_id: "${user_id}"
+        expect:
+          username: test01
