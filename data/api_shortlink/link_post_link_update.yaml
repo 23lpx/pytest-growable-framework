@@ -1,0 +1,105 @@
+# 商用短链平台 · link 域 —— POST /link-server/api/link/v1/update
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+base_info:
+  api_name: link-update
+  url: '/link-server/api/link/v1/update'
+  method: POST
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "更新：改标题"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "<mappingId>"
+      code: "<code>"
+      title: "改名后"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "更新：改域名"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "<mappingId>"
+      code: "<code>"
+      domainId: "1"
+      domainType: "OFFICIAL"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "更新：title 长度 129"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "<mappingId>"
+      code: "<code>"
+      title: "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新：请求里的 code 与库中不一致"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "<mappingId>"
+      code: "zzzzzz"
+      title: "x"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "更新：code 格式非法"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "<mappingId>"
+      code: "a-1"
+      title: "x"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新：mappingId 不存在"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "999999999999"
+      code: "<code>"
+    validation:
+      - contains:
+          code: 260404
+  - case_name: "更新：越权改他人短链"
+    headers:
+      token: "${token_b}"
+    data:
+      mappingId: "<mappingId>"
+      code: "<code>"
+      title: "hacked"
+    validation:
+      - contains:
+          code: 260404
+  - case_name: "更新：缺 mappingId"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新：缺 code"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "<mappingId>"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新：未登录"
+    data:
+      mappingId: "1"
+      code: "abc"
+    validation:
+      - contains:
+          code: 250004

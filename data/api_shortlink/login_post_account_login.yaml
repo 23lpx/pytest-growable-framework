@@ -1,0 +1,392 @@
+# 商用短链平台 · login 域 —— POST /account-server/api/account/v1/login
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+# ⚠️ 第一条必须是「成功登录」—— conftest 的 shortlink_login fixture 取第一条，
+#    靠它的 extract 把 token 写进变量池。改顺序前先看这里。
+base_info:
+  api_name: login-login
+  url: '/account-server/api/account/v1/login'
+  method: POST
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "手机号校验：合法已注册（有效等价类）"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 0
+    extract:
+      token: $.data
+  - case_name: "手机号校验：空字符串"
+    data:
+      phone: ""
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "手机号校验：未注册手机号"
+    data:
+      phone: "19900001111"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：长度10位"
+    data:
+      phone: "1380000000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：含字母"
+    data:
+      phone: "1380000000a"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：首尾含空格"
+    data:
+      phone: " 13800000000 "
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：长度12位"
+    data:
+      phone: "138000000000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：首位非1（2开头）"
+    data:
+      phone: "23800000000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：号段非法（12开头）"
+    data:
+      phone: "12800000000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：中间含空格"
+    data:
+      phone: "138 0000 0000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：含中文"
+    data:
+      phone: "一三800000000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：传 number 而非 string"
+    # ⚠️ 契约模糊点：文档要求 phone 为 string，服务端(Jackson)宽松接受 number。按实测记录行为，属「输入校验不严格」
+    data:
+      phone: 13800000000
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "手机号校验：全空格"
+    data:
+      phone: "   "
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "手机号校验：缺 phone 字段"
+    data:
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "手机号校验：显式传 null"
+    data:
+      phone: null
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "手机号校验：传 array"
+    data:
+      phone: ["13800000000"]
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "手机号校验：长度1位"
+    data:
+      phone: "1"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：长度20位"
+    data:
+      phone: "13800000000000000000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：含特殊符号"
+    data:
+      phone: "1380000000!"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：含 emoji"
+    data:
+      phone: "13800000000😀"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：0 开头"
+    data:
+      phone: "03800000000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：10 开头"
+    data:
+      phone: "10800000000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：11 开头"
+    data:
+      phone: "11800000000"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：100 位纯数字"
+    data:
+      phone: "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号校验：1000 位混合字符"
+    data:
+      phone: "a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号安全：SQL 注入万能密码"
+    data:
+      phone: "' OR '1'='1"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "手机号安全：SQL 注入联合查询"
+    data:
+      phone: "' UNION SELECT version(),user(),database() --"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 250002
+  - case_name: "密码校验：缺 pwd 字段"
+    data:
+      phone: "${shortlink.phone}"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "密码校验：显式传 null"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: null
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "密码校验：空字符串"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: ""
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "密码校验：全空格"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "   "
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "密码校验：传 number"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: 123456
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：传 array"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: ["CHANGE_ME_PWD"]
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "密码校验：长度5位"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "12345"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：长度1位"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "a"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：长度17位"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "CHANGE_ME_PWD7890xyz"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：长度100位"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：大小写颠倒"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "CHANGE_ME_PWD"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：首尾含空格"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: " CHANGE_ME_PWD "
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：中间含空格"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "CHANGE_ME_PWD"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：密码错误（基准）"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "wrongpwd"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：含特殊字符"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "abc!@#123"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：纯数字 8 位"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "12345678"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：纯字母 8 位"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "abcdefgh"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：中文密码"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "密码123456"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：emoji 密码"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "abc😀123"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码安全：SQL 注入"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "' OR '1'='1"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "密码校验：1000 位极端超长"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a1!a"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "响应体：失败返回结构（密码错）"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "wrongpwd"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "响应体：参数缺失"
+    data:
+      phone: ""
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "响应体：错误提示可读性"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "wrongpwd"
+    validation:
+      - contains:
+          code: 250003
+  - case_name: "响应体：成功返回结构"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "响应体：成功响应字段类型"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "响应体：token 非空与格式"
+    data:
+      phone: "${shortlink.phone}"
+      pwd: "${shortlink.pwd}"
+    validation:
+      - contains:
+          code: 0

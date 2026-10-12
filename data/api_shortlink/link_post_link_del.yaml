@@ -1,0 +1,65 @@
+# 商用短链平台 · link 域 —— POST /link-server/api/link/v1/del
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+base_info:
+  api_name: link-del
+  url: '/link-server/api/link/v1/del'
+  method: POST
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "删除：正常删除"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "<mappingId>"
+      code: "<code>"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "删除：越权删他人短链"
+    headers:
+      token: "${token_b}"
+    data:
+      mappingId: "<mappingId>"
+      code: "<code>"
+    validation:
+      - contains:
+          code: 260404
+  - case_name: "删除：重复删除"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "<mappingId>"
+      code: "<code>"
+    validation:
+      - contains:
+          code: 260404
+  - case_name: "删除：不存在的 mappingId"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "999999999999"
+      code: "abc"
+    validation:
+      - contains:
+          code: 260404
+  - case_name: "删除：缺 mappingId"
+    headers:
+      token: "${token}"
+    data:
+      code: "abc"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "删除：code 格式非法"
+    headers:
+      token: "${token}"
+    data:
+      mappingId: "<mappingId>"
+      code: "@@@"
+    validation:
+      - contains:
+          code: 110003

@@ -1,0 +1,93 @@
+# 商用短链平台 · link 域 —— GET /{code}
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+# 路径参数 {code} 由每条用例的 path_params 填。
+base_info:
+  api_name: link-{code}
+  url: '/{code}'
+  method: GET
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "跳转：已存在的短链"
+    path_params:
+      code: "{code}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)
+  - case_name: "跳转：Location 头等于原始长链"
+    path_params:
+      code: "{code}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)
+  - case_name: "跳转：不存在的短链码"
+    path_params:
+      code: "nonexist123"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)
+  - case_name: "跳转：首位非法（库标识校验）"
+    path_params:
+      code: "zzz999"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)
+  - case_name: "跳转：末位非法（表标识校验）"
+    path_params:
+      code: "aaaaaa"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)
+  - case_name: "跳转：短链码含非法字符（横杠）"
+    path_params:
+      code: "a1-2b"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)
+  - case_name: "跳转：已逻辑删除的短链"
+    path_params:
+      code: "{deleted_code}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)
+  - case_name: "跳转：已过期的短链"
+    path_params:
+      code: "{expired_code}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)
+  - case_name: "跳转：state 非 ACTIVE"
+    path_params:
+      code: "{locked_code}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)
+  - case_name: "删除：删后跳转应 404（端到端）"
+    path_params:
+      code: "{deleted_code}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: (非 JsonData)

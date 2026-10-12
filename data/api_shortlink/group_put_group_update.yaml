@@ -1,0 +1,115 @@
+# 商用短链平台 · group 域 —— PUT /link-server/api/group/v1/update
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+base_info:
+  api_name: group-update
+  url: '/link-server/api/group/v1/update'
+  method: PUT
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "更新分组：正常改名"
+    headers:
+      token: "${token}"
+    data:
+      id: "<g1_id>"
+      title: "g1改"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "更新分组：越权改他人分组"
+    headers:
+      token: "${token_b}"
+    data:
+      id: "<g1_id>"
+      title: "hacked"
+    validation:
+      - contains:
+          code: 23503
+  - case_name: "更新分组：不存在的 id"
+    headers:
+      token: "${token}"
+    data:
+      id: 111111111111
+      title: "x"
+    validation:
+      - contains:
+          code: 23503
+  - case_name: "更新分组：改成另一个已有分组的名字"
+    headers:
+      token: "${token}"
+    data:
+      id: "<g1_id>"
+      title: "g2"
+    validation:
+      - contains:
+          code: 23001
+  - case_name: "更新分组：缺 id 字段"
+    headers:
+      token: "${token}"
+    data:
+      title: "x"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新分组：缺 title 字段"
+    headers:
+      token: "${token}"
+    data:
+      id: "<g1_id>"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新分组：title 空字符串"
+    headers:
+      token: "${token}"
+    data:
+      id: "<g1_id>"
+      title: ""
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新分组：title 显式传 null"
+    headers:
+      token: "${token}"
+    data:
+      id: "<g1_id>"
+      title: null
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新分组：空请求体"
+    headers:
+      token: "${token}"
+    data:
+      {}
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新分组：id 传字符串形式的数字"
+    headers:
+      token: "${token}"
+    data:
+      id: "<g1_id>"
+      title: "g1改"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "更新分组：id 传非数字字符串"
+    headers:
+      token: "${token}"
+    data:
+      id: "abc"
+      title: "x"
+    validation:
+      - contains:
+          code: 110003
+  - case_name: "更新分组：未登录"
+    data:
+      id: "1"
+      title: "x"
+    validation:
+      - contains:
+          code: 250004

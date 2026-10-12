@@ -1,0 +1,40 @@
+# 商用短链平台 · stats 域 —— POST /data-server/api/visit_stats/v1/device_info
+#
+# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
+# 由 Excel 用例表转换而来，原始表见项目 docs/。
+base_info:
+  api_name: stats-device_info
+  url: '/data-server/api/visit_stats/v1/device_info'
+  method: POST
+  headers:
+    'Content-Type': 'application/json'
+
+test_cases:
+  - case_name: "设备分布：正常查询"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      startTime: "20261005"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 0
+  - case_name: "设备分布：跨度 31 天"
+    headers:
+      token: "${token}"
+    data:
+      code: "<code>"
+      startTime: "20260904"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 400002
+  - case_name: "设备分布：未登录"
+    data:
+      code: "<code>"
+      startTime: "20261005"
+      endTime: "20261005"
+    validation:
+      - contains:
+          code: 250004
