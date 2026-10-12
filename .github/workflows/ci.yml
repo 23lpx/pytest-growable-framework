@@ -1,0 +1,67 @@
+name: CI
+
+# 什么时候跑：推 develop/main、开 PR、以及手动点一下（workflow_dispatch）。
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  framework-test:
+    name: 框架单测 + 通知
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 拉代码
+        uses: actions/checkout@v4
+
+      - name: 装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: 装依赖
+        run: pip install -e ".[dev]"
+
+      # 只跑 tests/（框架自身的单测）：它零外部依赖，CI 里一定跑得起来。
+      # cases/ 那 30 条接口用例要 flaskServer + MySQL，GitHub 的 Linux runner
+      # 起不了 Windows GUI 的 exe —— 那部分等接了真环境再说（见 README）。
+      #
+      # continue-on-error：测试失败也要往下走（发通知、传报告），
+      # job 的红 / 绿留到最后一步拿 outcome 判。
+      - name: 跑框架单测
+        id: test
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          pytest tests/ --junitxml=reports/junit.xml --alluredir=reports/allure-results
+
+      - name: 传 allure 原始数据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: reports/allure-results
+          retention-days: 7
+
+      # 敏感值全部走 GitHub Secrets，不写进仓库（和 config.yaml 那条一个道理）。
+      # 没配的渠道，notify.py 会自己跳过，不会报错。
+      - name: 发通知
+        if: always()
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python scripts/notify.py reports/junit.xml
+
+      # 通知发完了才把测试的真实结果还给 CI —— 顺序不能反：
+      # 测试一挂 job 就中止的话，最需要通知的时候反而收不到通知。
+      - name: 测试失败则让 job 变红
+        if: steps.test.outcome == 'failure'
+        run: exit 1
