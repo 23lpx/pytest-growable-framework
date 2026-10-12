@@ -212,6 +212,6 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 - 数据库/接口断言"看起来过了但没验到" → 注意 `contains` 是**精确等值**匹配（不是子串），yaml 里要写完整消息
 - 跨用例关联在 `-n` 下失效 → 变量池是进程内的，有依赖的用例集别开 `-n`
 - `db:` 断言报 `DatabaseError` → 先查**配置和容器**（`config/config.yaml` 的 `db` 段、docker 起没起），**别去改断言** —— 那是环境坏了，不是用例失败
-- **日志看不见了** → 两条路查：① logger 不能设 `propagate = False`（会切断 pytest 挂 root 的日志捕获）；② 默认不加 `-s`，日志只在用例失败时以 `Captured log` 形式出现，要看实时就加 `-s`
+- **日志看不见了** → 三条路查：① logger 不能设 `propagate = False`（会切断 pytest 挂 root 的日志捕获）；② 默认不加 `-s`，日志只在用例失败时以 `Captured log` 形式出现，要看实时就加 `-s`；③ **`LogConfig.LOGGER_NAME` 必须和包名一致** —— 各模块 `getLogger(__name__)` 得到 `pytest_framework.xxx`，冒泡到 `pytest_framework` 就停，名字写错 handler 就形同虚设，日志**静悄悄全丢**（改包名时最容易忘，目录重构真断过一次）
 - 控制台输出挤成一团 → 检查 `addopts` 里有没有 `-s`（有的话日志会糊在 pytest 那行未结束的用例 id 后面）
 - 场景失败看不出断在第几步 → 报错上下文里有 `步骤=N/M` + 接口名（`ScenarioRunner` 补的）；加 `-s` 还能看到每步的 `--- 步骤 N/M: xxx ---` 日志

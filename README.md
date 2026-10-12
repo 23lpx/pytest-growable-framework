@@ -312,6 +312,8 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 **⑮ 单测别读生产配置** —— 断言一旦绑在真实值上，「改一下 `config/config.yaml`」就会把单测带崩，「框架单测零依赖」变成空话。单测要配置文件就用自己的（`tests/data/config.yaml`）。
 
+**⑯ `LOGGER_NAME` 必须和包名一致，否则日志静默全丢** —— 各模块用 `logging.getLogger(__name__)`，名字是 `pytest_framework.xxx`，冒泡到 `pytest_framework` 就停。目录重构把包名从 `framework/` 改成 `src/pytest_framework/` 时，`LogConfig.LOGGER_NAME` 没跟着改，handler 挂在一个**永远收不到消息**的 logger 上 —— 文件日志、控制台日志**一起没了，不报错也不告警**，`logs/app.log` 停在重构前那一刻。**教训：日志这种东西，改完要真跑一次确认"它确实写进去了"，光看代码看不出来。**（脱敏不受影响 —— `install_masking` 走的是全局 `LogRecord` 工厂，不依赖 logger 名。）
+
 ---
 
 ## 下一步
