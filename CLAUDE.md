@@ -20,6 +20,8 @@ Python 3.12，venv 在 `.venv/`。**必须用 `.venv` 里的解释器跑，禁�
 ```bash
 ./.venv/Scripts/python.exe -m pytest                                  # 跑接口用例（testpaths=cases）
 ./.venv/Scripts/python.exe -m pytest tests/                           # 跑框架自身的单测（不依赖被测服务）
+./.venv/Scripts/python.exe -m pytest tests/ --junitxml=reports/junit.xml   # 出 junit 结果（CI 里就喂给通知脚本）
+./.venv/Scripts/python.exe scripts/notify.py reports/junit.xml        # 本地验通知：不配环境变量就只打印、不发
 ./.venv/Scripts/python.exe -m pytest --collect-only -q                # 只收集不执行（用例数不对时第一件事）
 ./.venv/Scripts/python.exe -m pytest -k 商品详情                        # 按名字筛（用例 id = 接口名:用例名）
 ./.venv/Scripts/python.exe -m pytest -m smoke                          # 按标记筛
@@ -38,6 +40,7 @@ Windows 控制台中文乱码时加 `PYTHONIOENCODING=utf-8`。
 - **平时在 `develop` 分支开发**，一版做完再合进 `main`。
 - `main` 只放「已完成的版本」，**不直接在 main 上开发 / 提交**。
 - 提交前 `pytest` 要绿。
+- 推上去后 GitHub Actions 会跑**框架单测**（`.github/workflows/ci.yml`）—— **接口用例不在 CI 里**（`flaskServer.exe` 是 Windows GUI，Linux runner 起不了；出路是 self-hosted runner，真需要了再做）。
 - Claude Code 提的 commit，message 结尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
 
 ```bash
@@ -132,6 +135,8 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 | `config/config.yaml` | **环境配置**（base_url / timeout / 账号）。换环境只改这份。真实项目该进 `.gitignore` |
 | `pyproject.toml` | 打包声明（src-layout 的包在 `src/` 下）+ 依赖清单 |
 | `tools/` | 本地工具（allure 命令行），**不进 git**。各人自己解压一份 |
+| `.github/workflows/ci.yml` | **CI**（push / PR / 手动触发）：跑**框架单测** + 存 allure 产物 + 发通知。用 `continue-on-error` + 最后判 `outcome`，保证**测试失败也照发通知**。**只跑 `tests/`** —— `cases/` 要 flaskServer，Linux runner 起不了 |
+| `scripts/notify.py` | **CI 胶水**：`junit.xml` → 解析 → 拼消息 → 分发钉钉 / 邮件。**独立脚本、不 import 框架** —— 它不该认识 `CaseRunner` 这些概念。敏感值走 GitHub Secrets（`Settings → Secrets and variables → Actions`，**不是 Environments**），没配的渠道自动跳过 |
 
 **关键边界**：`HttpClient` 是通用底座，只认纯值（method/path/headers/data），**不许 import 模型**；谁要 `CaseModel`，谁就在 `adapters` / `usecases` 里。
 

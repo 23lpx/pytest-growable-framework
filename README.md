@@ -200,6 +200,7 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | 13 | **allure 报告**：场景 → 可视化**嵌套 step**；`environment.properties` 从配置生成 | ✅ |
 | 14 | **目录重构**：src-layout + 按架构层分目录（entities / ports / usecases / adapters / infrastructure）；`testcase/` → `cases/`，删 `archive/` | ✅ |
 | 15 | **查库校验**：`ports.QueryExecutor`（只读）+ `DbChecker` + pymysql 底座；yaml 加 `db:` 段 —— 数据校验从「看响应」扩到「看库」 | ✅ |
+| 16 | **CI 自动化**：GitHub Actions（push / PR 触发）跑**框架单测** + 存 allure 产物；`scripts/notify.py` 跑完发钉钉 / 邮件 | ✅ |
 
 ---
 
@@ -208,6 +209,10 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 ```bash
 # 跑接口用例（testpaths = cases）
 ./.venv/Scripts/python.exe -m pytest
+
+# 本地验一次通知（不配环境变量就只打印消息、不发）
+./.venv/Scripts/python.exe -m pytest tests/ --junitxml=reports/junit.xml
+./.venv/Scripts/python.exe scripts/notify.py reports/junit.xml
 
 # 换环境：临时指到别的服务地址（优先级：命令行 > 环境变量 > config/config.yaml）
 ./.venv/Scripts/python.exe -m pytest --base-url http://127.0.0.1:9999
@@ -321,7 +326,20 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
    **优先走接口造数**（调被测系统自己的增删接口），而不是直接写库 —— 直接写库绕过了业务逻辑，
    造出来的数据真实业务里不可能存在。写库只在「测试自己的库（工作库）」时才考虑。
 
-（再往后：自动化集成 —— CI 里跑框架单测 + 接口用例。）
+**⑯ 自动化集成**（进度表 16）—— **框架侧通了**：
+
+- `.github/workflows/ci.yml`：push / PR / 手动触发，跑 `tests/`（107 条框架单测，
+  **零外部依赖**），出 `junit.xml` + allure 结果，跑完发通知。
+  用 `continue-on-error` + 最后一步判 `outcome` —— **测试失败也照发通知**
+  （失败的时候恰恰最需要它）。
+- `scripts/notify.py`：**独立脚本，不 import 框架**（它是 CI 胶水，不是框架能力）。
+  读 `junit.xml` → 拼消息 → 分发钉钉 / 邮件；加渠道只加一个 `send_xxx`，
+  解析和渲染一个字不用动。敏感值走 **GitHub Secrets**
+  （仓库 Settings → Secrets and variables → **Actions**，**不是 Environments**），
+  没配的渠道自动跳过 —— 本地跑不会因为缺配置而报错。
+- ⚠️ **`cases/` 那 30 条接口用例还进不去 CI**：`flaskServer.exe` 是 Windows GUI
+  （PyQt5），GitHub 的 Linux runner 起不了，而且 exe 不在仓库里。
+  出路是 **self-hosted runner**（跑在自己机器上，那儿有 exe）—— 真需要了再做。
 
 ---
 
