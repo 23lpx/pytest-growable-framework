@@ -8,23 +8,33 @@
 
 ## 被测服务
 
+**商用短链平台**（Java / Spring Cloud 多模块），**经网关**接：
+
 | 项 | 值 |
 |---|---|
-| 程序 | `flaskServer.exe`（PyInstaller 打包的 PyQt5 GUI 程序） |
-| 路径 | `D:\find_work\八股文\java后端八股文\07-项目\接口自动化\flaskServer\flaskServer\flaskServer.exe` |
-| 地址 | `http://127.0.0.1:8787` |
+| 地址 | `http://TEST_GATEWAY_HOST:8888`（经网关，服务不对外直连） |
+| 数据目录 | `data/api_shortlink/` |
+| 用例入口 | `cases/test_shortlink.py` |
 
-⚠️ **每次重启电脑都要手动打开它，并点窗口里的「启动服务」按钮** —— 双击 exe 只是开了个窗口，服务不会自己起。
+⚠️ **服务器按需开关**（测试应用机 + 中间件机），连不上先确认那两台机器开着。
 
-**怎么确认服务活着**：随便发个请求，404 也说明它在跑；连不上才是没起。
+**鉴权**：登录接口免登，返回的 token 放**请求头**（`token: <JWT>`）；缺 / 错 token → `code=250004`。测试账号配在 `config/config.yaml` 的 `shortlink` 段。
+
+**成功判据是 `code=0`** —— 业务失败**也是 HTTP 200**，**只看响应体的 code**（`contains` 是**精确等值**，不是子串）。
+
+> **历史**：研发期用过 `flaskServer.exe`（本地 PyQt5 mock）练手，2026-10-12 已归档到 `archive/`。
+> 它是**纯内存 mock、没有数据库**（用 MySQL general_log 实测确认），所以「查库校验」那一步**它教不了** ——
+> 真靶子来了之后它就从"练手"变成了"每次跑测试都得先双击它"的包袱。详见 `archive/README.md`。
 
 ### 账号与鉴权
 
-| 用户名 | 密码 |
+| 项 | 值 |
 |---|---|
-| `test01` | `admin123` |
+| 手机号 | `13800000000`（`config.shortlink.phone`） |
+| 密码 | `CHANGE_ME_PWD`（`config.shortlink.pwd`） |
+| token 位置 | **请求头** `token: <JWT>` |
 
-（这两个值配在 `config/config.yaml` 里，用例 yaml 用 `${login.username}` 引用，**不写死**。）
+（这两个值配在 `config/config.yaml` 的 `shortlink` 段，用例 yaml 用 `${shortlink.phone}` 引用，**不写死**。）
 
 ⚠️ **鉴权用 token，不是 cookie** —— 登录响应里返回 `token` 字段，后续请求把它当**表单参数**传（不是放 header）。
 缺 token → `9001 新增失败，参数缺失或token失效`。
@@ -70,8 +80,8 @@ src/pytest_framework/
 数据流（两条路径最终汇合到同一个执行器）：
 
 ```
-data/api/*.yaml         ← 单接口（dict：base_info + test_cases）
-data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行顺序**）
+data/api_shortlink/*.yaml  ← 单接口（dict：base_info + test_cases）
+data/scenarios/*.yaml      ← 场景（list：N 个接口块）⚠️ **当前无数据文件**（用例已归档）
    │
    ├─ 单接口 ── CaseModel.discover() 扫目录
    │     │  adapters/reader.YamlRead.read
@@ -111,7 +121,7 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 | 单接口 | `CaseModel.discover()` → `ExecuteCase.discover()` | ✅ 展平 | **一条 case 一个节点** | 数据驱动**主力**（量大、独立） |
 | 场景 | `ScenarioModel.discover()` | ❌ 不展平 | **一个场景一个节点** | 只做**简单线性**流程 |
 
-**加数据文件 = 加用例，代码一个字不改** —— `cases/` 里只有两个文件：`test_api.py`（所有单接口）+ `test_scenario.py`（所有场景）。粒度差别就在「要不要展平」这一处。
+**加数据文件 = 加用例，代码一个字不改** —— `cases/` 里只有一个文件 `test_shortlink.py`，它把 `data/api_shortlink/` 下的用例**展平**成 pytest 节点。粒度差别就在「要不要展平」这一处。
 
 **两条路径，一个执行器**：单接口用 pytest 参数化展开成 N 个节点，场景用 `ScenarioRunner` 收成 1 个节点。两者最终都调 `CaseRunner.run(case)` —— **它永远只跑一条，不认识"列表"、也不认识"场景"**。循环策略归调用方，执行能力归 `CaseRunner`。
 
@@ -141,11 +151,11 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 
 **依赖倒置：内层只认端口，不认实现** —— `adapters` / `usecases` 依赖 `ports.Sender`（端口）+ `entities.contracts.ResponseLike`（响应契约），**不 import `infrastructure.HttpClient`、也不 import `requests`**；`adapters` **不 import pytest**。全仓**只有 `conftest` 知道 `HttpClient` 存在**。判据：**内层模块的 import 里有没有出现具体库或外层类**。
 
-**配置当变量池的父级**：`context` fixture 建的是 `Context(parent=config)` —— `${...}` 因此只有**一个入口**：`${token}` 查变量层（运行时提取的），`${login.username}` 落到配置层（`config/config.yaml`）。**配置层只读**：用例 `set` 同名 key 只写自己那层，覆盖不了配置。`Context` 只认 `VariableSource` 契约，**不认识 `Config`** —— 换任何别的来源都行。
+**配置当变量池的父级**：`context` fixture 建的是 `Context(parent=config)` —— `${...}` 因此只有**一个入口**：`${token}` 查变量层（运行时提取的），`${shortlink.phone}` 落到配置层（`config/config.yaml`）。**配置层只读**：用例 `set` 同名 key 只写自己那层，覆盖不了配置。`Context` 只认 `VariableSource` 契约，**不认识 `Config`** —— 换任何别的来源都行。
 
 **占位符替换必须产副本**：`resolve_case()` 返回 `ResolvedCase`，**绝不就地改原 case** —— `ExecuteCase` 是收集阶段构造、整个 session 共用的（含 `--reruns`），就地改会让第二遍跑到脏数据。
 
-**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就声明 `conftest` 的 `login` fixture —— `cases/test_api.py` 给所有单接口用例都挂上了（session 级只登一次，零成本，不用再按文件声明）。
+**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就声明 `conftest` 的 fixture —— `shortlink_login`（登一次写 token）、`shortlink_prepare`（造分组/域名），`cases/test_shortlink.py` 把它们挂给了所有用例（session 级只跑一次，零成本）。
 
 **文档**：`docs/代码规范.md`（写代码前看）、`docs/架构审查.md`（分层基线 + 依赖判据，加东西前对照）、`docs/interface_test_framework_design_v2.md`、`docs/framework_exception_design_methodology.md`、`docs/修改方案.txt`
 
@@ -155,14 +165,14 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 
 | 目录 | 干什么 |
 |---|---|
-| `cases/` | **只有两个文件**：`test_api.py`（收所有单接口）+ `test_scenario.py`（收所有场景）。`cases/test_/` 是老用例备份，**pytest 不收**（`norecursedirs`） |
+| `cases/` | **只有一个文件**：`test_shortlink.py`（收短链平台的单接口用例）。**加数据文件 = 加用例** |
 | `src/pytest_framework/` | **框架本体**，按架构层分目录：`entities/` `ports/` `usecases/` `adapters/` `infrastructure/` |
 | `tests/` | **框架自身的单测**。不在 `testpaths` 里，要显式 `pytest tests/` |
-| `data/api/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
-| `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序执行）。**加文件 = 加场景** |
-| `config/` | **环境配置**：`config.yaml`（base_url / 超时 / 账号）。换环境改这份，用例不用动 |
+| `data/api_shortlink/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
+| `config/` | **环境配置**：`config.yaml`（短链平台地址 / 超时 / 账号 / 脱敏）。换环境改这份，用例不用动 |
+| `archive/` | **归档区**：不再维护、pytest 也收不到（`testpaths = cases`）。现在装的是 flaskServer 那套，见 `archive/README.md` |
 | `docs/` | 设计文档：代码规范 / 架构审查 / 设计说明 |
-| `conftest.py` | **Composition Root** —— 唯一 `new` 具体实现的地方：`config` / `base_url` / `client` / `context` / `login` fixture + `init_logger()` |
+| `conftest.py` | **Composition Root** —— 唯一 `new` 具体实现的地方：`config` / `context` / `shortlink_client` / `shortlink_login` / `shortlink_prepare` / `db_checker` fixture + `init_logger()` |
 | `pytest.ini` | pytest 配置（含 `pythonpath = src`） |
 | `pyproject.toml` | 打包声明（src-layout 的包在 `src/` 下）+ 依赖清单 |
 | `logs/` `reports/` | 日志（按天切，**已脱敏**）/ 报告产物，**不进 git** |
@@ -216,7 +226,7 @@ data/scenarios/*.yaml   ← 场景（list：N 个接口块，**顺序即执行�
 ./.venv/Scripts/python.exe scripts/notify.py reports/junit.xml
 
 # 换环境：临时指到别的服务地址（优先级：命令行 > 环境变量 > config/config.yaml）
-./.venv/Scripts/python.exe -m pytest --base-url http://127.0.0.1:9999
+./.venv/Scripts/python.exe -m pytest -k login
 
 # 敏感值用环境变量注入（APP_ 前缀 + 双下划线分层）
 APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
@@ -297,7 +307,7 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 **⑦ 循环导入** —— 早期模型层和适配层互相 import 过一次，直接 `ImportError: partially initialized module`。单向依赖 + 必要时局部 import。
 
-**⑧ pytest 会递归收 `testpaths` 下的目录** —— `cases/test_/` 这种备份目录也会被收进来，里面 import 断了就整个 `collection error`，**一条都不跑**。已在 `pytest.ini` 用 `norecursedirs = test_` 排除。
+**⑧ pytest 会递归收 `testpaths` 下的目录** —— 早年的 `cases/test_/` 备份目录就被收进来过，里面 import 断了导致整个 `collection error`、**一条都不跑**。它现在归档到 `archive/`（`testpaths = cases` 收不到），`pytest.ini` 里那个 `test_` 继续留着当防御。
 
 **⑨ `norecursedirs` 写一个值会把默认值整个顶掉** —— 只写 `test_`，pytest 默认的 `.venv` / `.*` / `*.egg` 就全失效了，`pytest .` 会把三方库自带的测试也收进来。要写就得把默认值补回来：`test_ *.egg .* venv build dist __pycache__`。
 
@@ -368,9 +378,9 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
   解析和渲染一个字不用动。敏感值走 **GitHub Secrets**
   （仓库 Settings → Secrets and variables → **Actions**，**不是 Environments**），
   没配的渠道自动跳过 —— 本地跑不会因为缺配置而报错。
-- ⚠️ **`cases/` 那 30 条接口用例还进不去 CI**：`flaskServer.exe` 是 Windows GUI
-  （PyQt5），GitHub 的 Linux runner 起不了，而且 exe 不在仓库里。
-  出路是 **self-hosted runner**（跑在自己机器上，那儿有 exe）—— 真需要了再做。
+- ⚠️ **`cases/` 那 225 条接口用例还进不去 GitHub Actions**：它们要**外网的测试环境**
+  （`TEST_GATEWAY_HOST:8888`），GitHub 的 runner 够不着。接口那条链走 **Jenkins**
+  （在被测项目侧，工具机跑）—— 本仓的 GHA 只管**框架单测**。
 
 **CI 要在 GitHub 上配的 Secrets**（仓库 Settings → Secrets and variables → **Actions**，
 **不是 Environments**）—— 这些值只住在 GitHub，**绝不进仓库**：
@@ -457,32 +467,33 @@ class TestScenario:
 `config/config.yaml`：
 
 ```yaml
-base_url: http://127.0.0.1:8787
-
 http:
   timeout: 10
 
-login:                 # 只有「正确的账号密码」进配置
-  username: test01
-  password: admin123
+shortlink:                       # 被测环境（经网关）
+  base_url: http://TEST_GATEWAY_HOST:8888
+  phone: "13800000000"           # 测试账号
+  pwd: CHANGE_ME_PWD
+
+# 另有两段见文件内注释：db（查库校验用的库）、masking（日志脱敏的档位与凭证特征）
 ```
 
 用例里用 `${...}` 引用 —— 和变量池**同一套语法**，不用记两种：
 
 ```yaml
 data:
-  user_name: ${login.username}   # 落到配置层
-  passwd:    ${login.password}
-  token:     ${token}            # 走变量层（运行时提取的）
+  phone: ${shortlink.phone}   # 落到配置层
+  pwd:   ${shortlink.pwd}
+  # token 不写在 data 里 —— 它在请求头：headers: {token: "${token}"}
 ```
 
-> 注意区分：`login_cases.yaml` 里「密码错误」那条的 `passwd: wrong` 是**用例数据**（故意写错），
+> 注意区分：`login_post_account_login.yaml` 里「密码错误」那条的 `pwd: definitely-wrong-pwd` 是**用例数据**（故意写错），
 > 只有「登录成功」那条的账号密码才是**配置**。同一个文件里两种东西并存，靠上面的判据分开。
 
-**优先级**：命令行 `--base-url` > 环境变量 > `config/config.yaml`。
+**优先级**：环境变量 > `config/config.yaml`。
 
 ```bash
-./.venv/Scripts/python.exe -m pytest --base-url http://127.0.0.1:9999
+./.venv/Scripts/python.exe -m pytest -k login
 APP_LOGIN__PASSWORD=real_pwd ./.venv/Scripts/python.exe -m pytest
 ```
 

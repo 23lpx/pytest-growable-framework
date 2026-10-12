@@ -40,7 +40,7 @@ Windows 控制台中文乱码时加 `PYTHONIOENCODING=utf-8`。
 - **平时在 `develop` 分支开发**，一版做完再合进 `main`。
 - `main` 只放「已完成的版本」，**不直接在 main 上开发 / 提交**。
 - 提交前 `pytest` 要绿。
-- 推上去后 GitHub Actions 会跑**框架单测**（`.github/workflows/ci.yml`）—— **接口用例不在 CI 里**（`flaskServer.exe` 是 Windows GUI，Linux runner 起不了；出路是 self-hosted runner，真需要了再做）。
+- 推上去后 GitHub Actions 会跑**框架单测**（`.github/workflows/ci.yml`）—— **接口用例不在 CI 里**（它要外网的测试环境，GitHub 的 runner 够不着；接口那条链走 **Jenkins**，在被测项目侧）。
 - Claude Code 提的 commit，message 结尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
 
 ```bash
@@ -65,10 +65,10 @@ git checkout develop                    # 切回来继续
    entities/  ← 最内（零第三方依赖）   ports/  ← 端口（内层定、外层实现）
    usecases/  adapters/  infrastructure/（最外，具体库都在这）
 
-data/api/*.yaml          ← 单接口（dict：base_info + test_cases）
-data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行顺序**）
+data/api_shortlink/*.yaml  ← 单接口（dict：base_info + test_cases）
+data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执行顺序**）⚠️ **当前没有数据文件**
    │
-   ├─ 单接口 ── CaseModel.discover() 扫目录
+   ├─ 单接口 ── CaseModel.discover("data/api_shortlink") 扫目录
    │     │  adapters/reader.YamlRead.read        读文件 → dict
    │     ▼
    │   entities/CaseModel                        封装：dict → 统一模型 {api, cases[]}
@@ -81,6 +81,8 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
    │     每条 case 一个节点（保住 -k / -m / 重跑 / -n）
    │
    └─ 场景 ── ScenarioModel.discover() 扫目录（**不展平**）
+         ⚠️ 场景**代码还在**（含框架单测），但**已经没有用例在用它**
+            —— 原来那套 flaskServer 电商场景已归档到 `archive/`
          │  adapters/reader.YamlRead.read
          ▼
        entities/ScenarioModel                    = list[CaseModel]（复用单接口解析器，只是拼积木）
@@ -128,15 +130,15 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 | `infrastructure/path.py` | `_project_root()`，定位项目根 |
 | `infrastructure/db.py` | MySQL 底座（pymysql / DictCursor / 断线重连）。**不认识测试概念**，只认 SQL |
 | **仓库其余部分** | |
-| `cases/` | 测试用例：`test_api.py`（flaskServer 单接口）+ `test_scenario.py`（场景）+ `test_shortlink.py`（短链平台单接口）。`cases/test_/` 是老用例备份，**pytest 不收** |
+| `cases/` | 测试用例：`test_shortlink.py`（短链平台单接口）。**加数据文件 = 加用例，不用写测试函数** |
 | `tests/` | **框架自身的单测**（不依赖被测服务）。裸跑 pytest 收不到，要 `pytest tests/` |
-| `data/api/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
-| `data/api_shortlink/` | **第二个被测系统**（短链平台）的单接口 yaml。和 `data/api/` **并列** —— 各自一个目录、各自一个入口，一个服务没开不影响另一个 |
-| `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序）。**加文件 = 加场景** |
+| `data/api_shortlink/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
+| `archive/` | **归档区**：不再维护、pytest 也收不到（`testpaths = cases`）。现在装的是 flaskServer 那套。见 `archive/README.md` |
+| `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序）。⚠️ **当前没有数据文件** —— 场景代码还在，用例已归档 |
 | `config/config.yaml` | **环境配置**（base_url / timeout / 账号）。换环境只改这份。真实项目该进 `.gitignore` |
 | `pyproject.toml` | 打包声明（src-layout 的包在 `src/` 下）+ 依赖清单 |
 | `tools/` | 本地工具（allure 命令行），**不进 git**。各人自己解压一份 |
-| `.github/workflows/ci.yml` | **CI**（push / PR / 手动触发）：跑**框架单测** + 存 allure 产物 + 发通知。用 `continue-on-error` + 最后判 `outcome`，保证**测试失败也照发通知**。**只跑 `tests/`** —— `cases/` 要 flaskServer，Linux runner 起不了 |
+| `.github/workflows/ci.yml` | **CI**（push / PR / 手动触发）：跑**框架单测** + 存 allure 产物 + 发通知。用 `continue-on-error` + 最后判 `outcome`，保证**测试失败也照发通知**。**只跑 `tests/`** —— `cases/` 要外网的测试环境，runner 够不着 |
 | `scripts/notify.py` | **CI 胶水**：`junit.xml` → 解析 → 拼消息 → 分发钉钉 / 邮件。**独立脚本、不 import 框架** —— 它不该认识 `CaseRunner` 这些概念。敏感值走 GitHub Secrets（`Settings → Secrets and variables → Actions`，**不是 Environments**），没配的渠道自动跳过 |
 
 **关键边界**：`HttpClient` 是通用底座，只认纯值（method/path/headers/data），**不许 import 模型**；谁要 `CaseModel`，谁就在 `adapters` / `usecases` 里。
@@ -159,7 +161,7 @@ data/scenarios/*.yaml    ← 场景（list：N 个接口块，**顺序即执行�
 
 **占位符替换必须产副本**：`resolve_case()` 返回 `ResolvedCase`，**绝不就地改原 case** —— `ExecuteCase` 是收集阶段构造、整个 session 共用的（含 `--reruns`），就地改会让第二遍跑到第一遍留下的脏数据。
 
-**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就写 `conftest` 的 `login` fixture（`cases/test_api.py` 给所有单接口用例都挂上了 —— session 级只登一次，零成本）。
+**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就写 `conftest` 的 fixture —— `shortlink_login`（登一次写 token）/ `shortlink_prepare`（造分组、域名），`cases/test_shortlink.py` 把它们挂给了所有用例（session 级只跑一次，零成本）。
 
 **数据驱动的边界（用户定调，别越界）**：**单接口是数据驱动主力**（量大、独立、一条 case 一个节点）；**场景只做简单线性流程** —— 场景 yaml 里**不许出现 if / 分支 / 循环**。需要流程控制的（重试、等待、条件跳过）**用代码写**（在 `cases/` 里直接写 test 函数调 `CaseRunner`，即"逃生舱"，和数据用例共存）。判据：**流程线性的 → yaml；有 如果/循环/等待 → 代码**。
 
@@ -207,40 +209,23 @@ FrameworkError（基类，带 context，上层可 add_context 补充如 case_nam
 
 Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原样 `raise`，由 pytest 判失败。
 
-## 被测服务（两个，并列）
+## 被测服务
 
-**框架同时服务两个系统**，它们**靠「目录 + 客户端 + 登录 fixture」三件套分开**，互不牵连：
+**商用短链平台**（Java / Spring Cloud 多模块），**经网关** `http://TEST_GATEWAY_HOST:8888`（配置在 `config.shortlink`）。**服务器按需开关**，连不上先确认那两台机器开着。
 
-| | ① flaskServer（本地 demo） | ② 商用短链平台（外网测试环境） |
-|---|---|---|
-| **数据目录** | `data/api/` | `data/api_shortlink/` |
-| **入口** | `cases/test_api.py` | `cases/test_shortlink.py` |
-| **客户端 fixture** | `client`（base_url 取 `config.base_url`） | `shortlink_client`（取 `config.shortlink.base_url`） |
-| **登录 fixture** | `login` | `shortlink_login` + `shortlink_prepare` |
-| **token 位置** | **表单参数** | **请求头** `token: <JWT>` |
-| **成功判据** | `msg_code=200` | `code=0`（**失败也 HTTP 200**） |
+- **仓库在 Gitee**（不是 GitHub）—— 它的 CI/CD 用 **Jenkins**（工具机 `JENKINS_HOST`），不是 GitHub Actions（**GHA 够不着 Gitee**）。细节见那个项目自己的文档
+- **鉴权**：token 放**请求头**（`token: <JWT>`），登录接口免登录；缺/错 token → `250004 账号未登录`
+- **成功判据是 `code=0`** —— 业务失败**也是 HTTP 200**，**只看响应体的 code**
+- **路径参数**用 `path_params`（见「一条用例能写哪些字段」），如 `/detail/{groupId}` + `path_params: {groupId: "${g1_id}"}`
+- **公共前置**由 `shortlink_prepare` fixture 造：`g1` 分组 + 官方域名 → 变量池 `${g1_id}` / `${domain_id}`
+- **契约模糊点与已知缺陷**都记在 yaml 的注释 / `xfail` 里 —— 改这批用例前先看那两处，别把「已知的」当成「新发现的」
 
-**为什么不是"一个入口 + `if` 判断扫哪个目录"**：两个系统是**并列关系不是分支** —— 各自一个入口，**一个服务没开不影响另一个**（flaskServer 没双击启动时，短链平台的用例照样能跑，反之亦然）。
+### 归档：flaskServer（研发期的靶场）
 
-### ① flaskServer
-
-`flaskServer.exe`（PyInstaller 打包的 PyQt5 GUI），`http://127.0.0.1:8787`。**重启电脑后要手动双击 exe 并点窗口里的「启动服务」**，光开窗口服务不会自己起。账号 `test01` / `admin123`（配在 `config/config.yaml`）。
-
-**鉴权用 token，不是 cookie**：登录响应返回 `token`，后续请求把它当**表单参数**传（不是放 header）；缺/错 token → `9001 新增失败，参数缺失或token失效`。
-
-**⚠️ 它是纯内存 mock，没有任何数据库**（2026-10-11 实测，用 MySQL general_log 抓的）。这解释了它为什么「固定值匹配」—— 内存里那个用户对象是写死的。
-
-### ② 商用短链平台
-
-Java / Spring Cloud 多模块项目，**经网关** `http://TEST_GATEWAY_HOST:8888`（配置在 `config.shortlink`）。**服务器按需开关**，连不上先确认机器开着。
-
-- **仓库在 Gitee**（不是 GitHub）—— 它的 CI/CD 用 Jenkins，见那边的项目文档
-- **token 放请求头**（`token: <JWT>`），登录接口免登录
-- **成功判据是 `code=0`**，业务失败也是 HTTP 200，**只看响应体的 code**
-- **路径参数**用 `path_params`（见「数据驱动」节），如 `/detail/{groupId}` + `path_params: {groupId: "${g1_id}"}`
-- **`shortlink_prepare` fixture 造公共前置**：`g1` 分组 + 官方域名 → 变量池 `${g1_id}` / `${domain_id}`
-
-**契约模糊点与已知缺陷**都记在 yaml 的注释 / `xfail` 里 —— 改这批用例前先看那两处，别把「已知的」当成「新发现的」。
+早期用过一个 `flaskServer.exe`（本地 PyQt5 mock，`127.0.0.1:8787`）练手，**2026-10-12 归档到 `archive/`**。
+它是**纯内存 mock、没有任何数据库**（2026-10-11 用 MySQL general_log 实测确认），所以「查库校验」那一步**它教不了**；
+真靶子（短链平台）来了之后它就从"练手"变成了"包袱"（每次跑测试都得先双击它）。
+**需要查当年怎么写的就看 `archive/`，别拿来跑**（`pytest.ini` 的 `testpaths = cases` 收不到它）。
 
 ## 排查顺序
 

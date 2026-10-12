@@ -1,18 +1,12 @@
 # 被测环境配置 —— 换环境改这一份，用例数据不用动。
 #
-# 这份文件**故意提交进 git**：本项目跑的是本地 demo 服务、账号是假的，
-# clone 下来直接能跑比较重要。
+# 这份文件**故意提交进 git**：测试环境的账号是测试专用的，
+# clone 下来配好就能跑比较重要。
 # 真实项目里它该进 .gitignore，敏感值走环境变量 / CI secrets ——
-# 覆盖写法：APP_LOGIN__PASSWORD=xxx（双下划线分层，见 framework/constants/config.py）。
-
-base_url: http://127.0.0.1:8787
+# 覆盖写法：APP_SHORTLINK__PWD=xxx（双下划线分层，见 adapters/config.py）。
 
 http:
   timeout: 10
-
-login:
-  username: test01
-  password: admin123
 
 # 查库校验用的库 —— 注意这是**测试自己的库**（工作库），不是被测服务的库。
 # demo 库随便造随便删。真实项目里，被测系统的库通常只给只读账号，造数得走接口。
