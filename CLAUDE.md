@@ -41,7 +41,7 @@ Windows 控制台中文乱码时加 `PYTHONIOENCODING=utf-8`。
 - **平时在 `develop` 分支开发**，一版做完再合进 `main`。
 - `main` 只放「已完成的版本」，**不直接在 main 上开发 / 提交**。
 - 提交前 `pytest` 要绿。
-- 推上去后 **GitHub Actions 跑框架单测**（`.github/workflows/ci.yml`）；**接口用例走 Jenkins**（工具机）—— 用例要连**内网**的测试环境，GHA 的 runner 够不着，Jenkins 和内网通。配置细节见 README「接口用例怎么进 Jenkins」。
+- 推上去后 **GitHub Actions 跑框架单测**（`.github/workflows/ci.yml`）；**接口用例走 Jenkins**（工具机）—— 用例要连**内网**的测试环境，GHA 的 runner 够不着，Jenkins 和内网通。配置细节见本文「CI / 部署配置」节。
 - ⚠️ **`git push` 会同时推 GitHub 和 Gitee**（`origin` 配了两个 push 地址）：GitHub 是主仓库，Gitee 是 **Jenkins 的拉取源** —— **只推 GitHub 的话，Jenkins 跑的还是旧代码**。想单独推某个远端要显式指定。
 - Claude Code 提的 commit，message 结尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
 - ⚠️ **敏感信息一律不入库**：服务器地址 / IP、账号密码、token / webhook 密钥，走 `config/config.yaml`（**不入库**，模板 `config/config.example.yaml`）或环境变量 / CI secrets —— **不许写进代码、用例数据、文档、注释、commit message**。判据还是那条「换个环境还成立吗」：账号密码不成立，就归本地 / secrets。
@@ -354,4 +354,70 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 - **流量额度** —— 免费包一天 3 条（建链用例连跑两遍都过，额度够；长期跑要盯）
 
 **框架侧还欠的**（框架缺口，不是用例问题）：跳转类断言（302 / Location，10 条 xfail）。
+
+## CI / 部署配置
+
+> 原在 README 里，2026-10-13 随「README 只留对外内容」一起挪过来 —— 这些是**运维细节**，不是给读者看的。
+
+**GitHub Actions**（`.github/workflows/ci.yml`）：push / PR / 手动触发 → 跑 `tests/` → 出 junit + allure 产物 → 发通知。用 `continue-on-error` + 最后一步判 `outcome`，**测试失败也照发通知**。只跑 `tests/`（`cases/` 要内网，runner 够不着）。
+
+要在 GitHub 上配的 Secrets（Settings → Secrets and variables → **Actions**，**不是 Environments**）—— 这些值只住在 GitHub，**绝不进仓库**：
+
+| Name | 用途 |
+|---|---|
+| `DINGTALK_WEBHOOK` | 钉钉机器人 Webhook 地址（安全设置选**「加签」**） |
+| `DINGTALK_SECRET` | 钉钉加签密钥（`SEC` 开头） |
+| `SMTP_HOST` | 如 `smtp.qq.com` |
+| `SMTP_PORT` | `465`（脚本走 SSL；填 587 是 STARTTLS，连不上） |
+| `SMTP_USER` | 完整邮箱地址 |
+| `SMTP_PASSWORD` | **授权码**，不是登录密码（QQ 邮箱要先开「IMAP/SMTP服务」） |
+| `MAIL_TO` | 收件人，多个用逗号隔开 |
+
+`MAIL_FROM` 可省（默认取 `SMTP_USER`）。**没配的渠道会被 `notify.py` 自动跳过**，本地跑不会因为缺配置而报错。
+
+**Jenkins job（`pytest-shortlink-api`，Freestyle）**
+
+| 配置 | 值 |
+|---|---|
+| 源码管理 | Git → Gitee 仓库，分支 `*/develop` |
+| 构建触发器 | 手动（可加定时） |
+| 构建环境 | 绑定凭据 → 环境变量 `DINGTALK_WEBHOOK` / `DINGTALK_SECRET` / `APP_SHORTLINK__PWD` / `APP_SHORTLINK__PHONE` |
+| Build step | 见下 |
+| 构建后操作 | Publish JUnit test result report → `reports/junit.xml` |
+
+```bash
+docker run --rm \
+  -v "$WORKSPACE":/app \
+  -v /data/pytest_venv:/venv \
+  -e DINGTALK_WEBHOOK -e DINGTALK_SECRET -e APP_SHORTLINK__PWD -e APP_SHORTLINK__PHONE \
+  -w /app \
+  python:3.12-slim \
+  bash -c '
+    [ -x /venv/bin/python ] || python -m venv /venv
+    /venv/bin/pip install -q -r requirements.txt || exit 1
+    mkdir -p reports
+    /venv/bin/python -m pytest cases/ --junitxml=reports/junit.xml; rc=$?
+    /venv/bin/python scripts/notify.py reports/junit.xml || true
+    exit $rc
+  '
+```
+
+- **为什么起 `python:3.12` 容器**：Jenkins 容器里没有 Python。起个 python 容器最省事，不用改 Jenkins 本身。
+- **`$WORKSPACE` 为什么能直接给 `docker run -v`**：Jenkins 容器当初是 `-v /data:/data` 挂进去的，容器里的工作区路径在宿主机上是同一个路径。
+- **`/data/pytest_venv`**：依赖装在这个挂载卷里，**第二次跑就快**（首次约 2 分钟，之后 20 秒）。
+- **`rc=$?` + `exit $rc`**：**用例失败时也要发通知**，发完再按原码退出 —— job 该红还是红。
+- **`-e VAR`**（不带值）：从宿主环境继承，**值不落在 job 配置里**。
+- **`config/config.yaml` 不入库**，所以 Jenkins 上靠 `APP_SHORTLINK__*` 环境变量注入账号。
+
+**两个远端**：`origin` 的 push 配了两个地址（GitHub 是主仓库，Gitee 是 Jenkins 的拉取源），一句 `git push` 同时推两边。
+
+```bash
+git remote -v
+#   origin  git@github.com:23lpx/pytest_practice.git                   (fetch)
+#   origin  git@github.com:23lpx/pytest_practice.git                   (push)
+#   origin  git@gitee.com:li-peng-xiang-2315915034/pytest_practice.git (push)
+```
+
+⚠️ 配的时候 `git remote set-url --add --push` 会把**继承来的**那个 push 地址顶掉，要**显式把两个都 add 一遍**。
+⚠️ 洗敏感值那次**强推过历史**，Jenkins workspace 里是旧 checkout —— **下次第一次构建可能要手工 wipe workspace**。
 
