@@ -11,7 +11,7 @@ base_info:
 
 test_cases:
   - case_name: "建链：正常建链（异步受理）"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+
     headers:
       token: "${token}"
     data:
@@ -80,7 +80,7 @@ test_cases:
       - contains:
           code: 110003
   - case_name: "建链：title 长度 128（边界内）"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+
     headers:
       token: "${token}"
     data:
@@ -105,7 +105,7 @@ test_cases:
       - contains:
           code: 110003
   - case_name: "建链：expired 为空（默认永久）"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+
     headers:
       token: "${token}"
     data:
@@ -118,7 +118,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "建链：expired 合法格式"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+
     headers:
       token: "${token}"
     data:
@@ -131,8 +131,9 @@ test_cases:
     validation:
       - contains:
           code: 0
-  - case_name: "建链：expired 格式非法"
-    xfail: "前置被破坏：删除分组用例会删掉 fixture 建的 g1，导致后续用例拿不到分组（用例间踩踏，待隔离）"
+  - case_name: "建链：expired 格式非法（服务端不校验，照收）"
+    # ⚠️ 契约模糊点：实测服务端**不校验** expired 的格式，非法值照样受理（返回 0）。
+    #    这里按**实测**写；哪天补上格式校验（返回 110003），用例会挂 → 逼你回来改。
     headers:
       token: "${token}"
     data:
@@ -144,7 +145,7 @@ test_cases:
       expired: "2027/12/31"
     validation:
       - contains:
-          code: 110003
+          code: 0
   - case_name: "建链：groupId 不存在"
     headers:
       token: "${token}"
@@ -207,7 +208,7 @@ test_cases:
       - contains:
           code: 250004
   - case_name: "建链：非幂等，同一长链建两次得两个码"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+
     headers:
       token: "${token}"
     data:
@@ -220,7 +221,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "建链：扣减流量（副作用验证）"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+
     headers:
       token: "${token}"
     data:

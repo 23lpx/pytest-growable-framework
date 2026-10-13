@@ -11,30 +11,10 @@ base_info:
     'Content-Type': 'application/json'
 
 test_cases:
-  - case_name: "删除分组：正常删除"
-    headers:
-      token: "${token}"
-    path_params:
-      groupId: "${g1_id}"
-    data:
-      {}
-    validation:
-      - contains:
-          code: 0
   - case_name: "删除分组：越权删他人分组"
     xfail: "缺测试账号：需要第二个账号才能验越权（测试环境未提供）"
     headers:
       token: "${token_b}"
-    path_params:
-      groupId: "${g1_id}"
-    data:
-      {}
-    validation:
-      - contains:
-          code: 23404
-  - case_name: "删除分组：重复删除已删的分组"
-    headers:
-      token: "${token}"
     path_params:
       groupId: "${g1_id}"
     data:
@@ -71,14 +51,7 @@ test_cases:
     validation:
       - contains:
           code: 250004
-  - case_name: "删除分组：删组不影响组下已建的短链"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
-    headers:
-      token: "${token}"
-    path_params:
-      groupId: "${g1_id}"
-    data:
-      {}
-    validation:
-      - contains:
-          code: 0
+# 【已移走】「删除分组：正常删除」/「重复删除已删的分组」→ `data/scenarios/group_lifecycle.yaml`
+#          （它们要删一个真组、再删一次，天然有先后）
+# 【已移走】「删除分组：删组不影响组下已建的短链」→ `cases/test_shortlink_flow.py`
+#          （它要先建真短链，而且建链是异步的，得轮询等 MQ）

@@ -11,7 +11,7 @@ base_info:
 
 test_cases:
   - case_name: "删除：正常删除"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+    xfail: "待补：需要一条真短链 —— 删链正路已被 cases/test_shortlink_flow.py 的逃生舱覆盖"
     headers:
       token: "${token}"
     data:

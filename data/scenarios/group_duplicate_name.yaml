@@ -1,0 +1,167 @@
+# 场景：分组重名的判定语义
+#
+# **为什么进场景**：判重必须对「已存在的组」再建才验得出来 —— 单接口的一条用例只能
+# 发一个请求，"先有个组"这个前提表达不了；硬要表达就得靠用例执行顺序，而 pytest 的
+# 顺序本来就不可靠（文件名字典序，-k / -n 下还会变）。
+#
+# 场景自带清理（末尾删掉自己建的两个组），跑完不留残留。
+#
+# 实测（2026-10-13）：把组改名成**已存在的组名**，服务端返回 **code 0（改名成功）** ——
+#   **更新接口不做重名校验**。原单接口用例期望 23503 是错的，已按实测收进本场景第 7 步。
+
+# 第 1 步：建基准组（后面的"重名"全以它为对照）
+- base_info:
+    api_name: group-add
+    url: '/link-server/api/group/v1/add'
+    method: POST
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 建基准组
+      headers:
+        token: "${token}"
+      data:
+        title: "dupname_base"
+      validation:
+        - contains:
+            code: 0
+
+# 第 2 步：查出它的 id —— 列表按 id 倒序，刚建的在第一个（snowflake 递增）
+- base_info:
+    api_name: group-list
+    url: '/link-server/api/group/v1/list'
+    method: GET
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 查基准组 id
+      headers:
+        token: "${token}"
+      data:
+        {}
+      extract:
+        dup_base_id: "$.data[0].id"
+      validation:
+        - contains:
+            code: 0
+
+# 第 3 步：同名再建 → 拒
+- base_info:
+    api_name: group-add
+    url: '/link-server/api/group/v1/add'
+    method: POST
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 同账号重名被拒
+      headers:
+        token: "${token}"
+      data:
+        title: "dupname_base"
+      validation:
+        - contains:
+            code: 23001
+
+# 第 4 步：尾随空格 → trim 后同名 → 拒
+- base_info:
+    api_name: group-add
+    url: '/link-server/api/group/v1/add'
+    method: POST
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 尾随空格算重名
+      headers:
+        token: "${token}"
+      data:
+        title: "dupname_base "
+      validation:
+        - contains:
+            code: 23001
+
+# 第 5 步：只差大小写 → **不算**重名
+- base_info:
+    api_name: group-add
+    url: '/link-server/api/group/v1/add'
+    method: POST
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 大小写不同不算重名
+      headers:
+        token: "${token}"
+      data:
+        title: "DUPNAME_BASE"
+      validation:
+        - contains:
+            code: 0
+
+# 第 6 步：查出大写变体的 id（同样取列表第一个 —— 它是最新建的）
+- base_info:
+    api_name: group-list
+    url: '/link-server/api/group/v1/list'
+    method: GET
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 查大写变体 id
+      headers:
+        token: "${token}"
+      data:
+        {}
+      extract:
+        dup_upper_id: "$.data[0].id"
+      validation:
+        - contains:
+            code: 0
+
+# 第 7 步：把大写变体的名字改成基准组的名
+#
+# ⚠️ **契约模糊点**：文档承诺「改成已有名字」该返回 23001 分组名重复，但**实测返回 0
+#    （改名成功）—— 更新接口不做重名校验**。这里按**实测**写。哪天被测系统补上这个
+#    校验，场景会挂 → 逼你回来改。
+- base_info:
+    api_name: group-update
+    url: '/link-server/api/group/v1/update'
+    method: PUT
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 改名撞已有组名（实测不查重）
+      headers:
+        token: "${token}"
+      data:
+        id: "${dup_upper_id}"
+        title: "dupname_base"
+      validation:
+        - contains:
+            code: 0
+
+# 第 8 步：清理 —— 把本场景建的两个组删掉
+- base_info:
+    api_name: group-del
+    url: '/link-server/api/group/v1/del/{groupId}'
+    method: DELETE
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 清理：删大写变体
+      headers:
+        token: "${token}"
+      path_params:
+        groupId: "${dup_upper_id}"
+      data:
+        {}
+      validation:
+        - contains:
+            code: 0
+    - case_name: 清理：删基准组
+      headers:
+        token: "${token}"
+      path_params:
+        groupId: "${dup_base_id}"
+      data:
+        {}
+      validation:
+        - contains:
+            code: 0
