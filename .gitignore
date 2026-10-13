@@ -25,3 +25,6 @@ tools/
 # ---- IDE / 本机配置 ----
 .idea/
 .mcp.json
+
+# ---- 环境配置（含测试账号、库密码，不进库；模板见 config/config.example.yaml）----
+config/config.yaml

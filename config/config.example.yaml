@@ -1,0 +1,39 @@
+# 被测环境配置 —— 模板。clone 下来先拷一份：
+#
+#     cp config/config.example.yaml config/config.yaml
+#
+# 再把里面的 <...> 换成真值。config.yaml 已在 .gitignore 里，**不会进 git**。
+# 真值也可以完全不落文件，用环境变量覆盖：
+#
+#     APP_SHORTLINK__PWD=xxx APP_SHORTLINK__PHONE=xxx
+#
+# （`APP_` 前缀 + 双下划线分层 → 映射到 `shortlink.pwd` / `shortlink.phone`，
+#   见 adapters/config.py。覆盖优先级高于本文件。）
+
+http:
+  timeout: 10
+
+# 查库校验用的库 —— 这是**测试自己的库**（工作库），不是被测服务的库。
+# 端口故意用 3307：3306 是本机其他项目共用的，别去搅。
+db:
+  host: 127.0.0.1
+  port: 3307
+  user: root
+  password: "<本地工作库密码>"
+  database: demo
+
+# 商用短链平台（Java / Spring Cloud），经网关接。
+# 测试账号是开发预先建好的，不走注册（注册要短信验证码）。
+shortlink:
+  base_url: http://<测试环境网关>:8888
+  phone: "<测试账号手机号>"
+  pwd: "<测试账号密码>"
+
+# 日志脱敏 —— 按环境分档：
+#   开发：不打码，看原值最方便 / 测试：脱敏（默认）/ 生产：不该落盘（待实现）
+# value_patterns 按「值的长相」打码：有些系统把凭证塞在普通字段名里（如 data），
+# 光靠字段名匹配会漏，所以每个被测系统在这里声明自己的凭证长相。
+masking:
+  mode: mask            # mask=脱敏 / off=不打码
+  value_patterns:
+    - '^dcloud-link'    # 短链平台的登录 token 形如：dcloud-link + JWT
