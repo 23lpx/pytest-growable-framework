@@ -165,7 +165,7 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
 | `src/pytest_framework/` | **框架本体**，按架构层分目录：`entities/` `ports/` `usecases/` `adapters/` `infrastructure/` |
 | `tests/` | **框架自身的单测**。不在 `testpaths` 里，要显式 `pytest tests/` |
 | `data/api_shortlink/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
-| `config/` | **环境配置**：`config.yaml`（短链平台地址 / 超时 / 账号 / 脱敏）。换环境改这份，用例不用动 |
+| `config/` | **环境配置**：`config.yaml`（短链平台地址 / 超时 / 账号 / 脱敏）—— **不入库**（在 `.gitignore` 里），仓库只留 `config.example.yaml` 占位符模板。换环境改这份，用例不用动 |
 | `archive/` | **归档区**：不再维护、pytest 也收不到（`testpaths = cases`）。现在装的是 flaskServer 那套，见 `archive/README.md` |
 | `docs/` | 设计文档：代码规范 / 架构审查 / 设计说明 |
 | `conftest.py` | **Composition Root** —— 唯一 `new` 具体实现的地方：`config` / `context` / `shortlink_client` / `shortlink_login` / `shortlink_prepare` / `db_checker` fixture + `init_logger()` |
@@ -328,6 +328,9 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 **⑰ 一次 `json.dumps` 能把整条脱敏废掉** —— 脱敏有两条路（**按字段名** / **按值特征**），**两条都要求"看到结构化数据"**。而 `http.py` 的 `_brief_body` 为了日志好看，把响应 `json.dumps` 成了字符串 —— **一序列化，结构就没了，两条路全断**。短链平台正好把 token 装在 `data` 字段里（key 不叫 `token`），于是**登录凭证明文落盘**。修法：**先脱敏、再序列化**（`json.dumps(mask(body), ...)`）。
 > **教训**：**"让日志好看"和"让日志安全"会互相拆台** —— 这两件事在代码里离得很远（一个在 `http.py` 的格式化，一个在 `logging/masking.py`），不真跑起来看不出来。改了日志的**呈现方式**，就要重验一遍**脱敏还灵不灵**。
+
+**⑱ 敏感信息进了公开仓库，"删掉"也晚** —— `config/config.yaml` 带着**测试账号 + 库密码**，连同 README 里的**测试环境网关 IP、Jenkins 工具机 IP**，一起提交进了**公开**仓库（GitHub + Gitee）。那份文件当时还特意注释着"**故意提交进 git**：clone 下来配好就能跑比较重要" —— 等于**把"方便"排在了"安全"前面**。发现后只能 `filter-repo` 洗历史 + 强推，**而且旧值仍留在 GitHub 的旧 commit 里（按 SHA 至今取得到）** —— 真算完还得**轮换凭据**。
+> **教训**：判断该不该入库的口径只有一个 —— 「**换个环境还成立吗**」。账号密码、服务器地址不成立，就该归 `.gitignore` + `config.example.yaml` + 环境变量 / CI secrets，**代码、用例、文档、注释、commit message 里都不写**。（现状：`config/config.yaml` 已不入库，仓库只留占位符模板。）
 
 ---
 
