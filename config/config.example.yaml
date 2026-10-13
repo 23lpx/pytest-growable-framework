@@ -9,6 +9,10 @@
 #
 # （`APP_` 前缀 + 双下划线分层 → 映射到 `shortlink.pwd` / `shortlink.phone`，
 #   见 adapters/config.py。覆盖优先级高于本文件。）
+#
+# ⚠️ 副作用：因为被 .gitignore 忽略，`git checkout` / `git merge` 会把它当成
+#    **可覆盖对象**直接清掉（2026-10-13 踩过）。换分支前留意；真值也别只存在
+#    这一个文件里 —— 放到密码管理器 / 环境变量更稳。
 
 http:
   timeout: 10
