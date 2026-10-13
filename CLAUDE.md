@@ -40,7 +40,8 @@ Windows 控制台中文乱码时加 `PYTHONIOENCODING=utf-8`。
 - **平时在 `develop` 分支开发**，一版做完再合进 `main`。
 - `main` 只放「已完成的版本」，**不直接在 main 上开发 / 提交**。
 - 提交前 `pytest` 要绿。
-- 推上去后 GitHub Actions 会跑**框架单测**（`.github/workflows/ci.yml`）—— **接口用例不在 CI 里**（它要外网的测试环境，GitHub 的 runner 够不着；接口那条链走 **Jenkins**，在被测项目侧）。
+- 推上去后 **GitHub Actions 跑框架单测**（`.github/workflows/ci.yml`）；**接口用例走 Jenkins**（工具机 `JENKINS_HOST`）—— 用例要连**内网**的测试环境，GHA 的 runner 够不着，Jenkins 和内网通。配置细节见 README「接口用例怎么进 Jenkins」。
+- ⚠️ **`git push` 会同时推 GitHub 和 Gitee**（`origin` 配了两个 push 地址）：GitHub 是主仓库，Gitee 是 **Jenkins 的拉取源** —— **只推 GitHub 的话，Jenkins 跑的还是旧代码**。想单独推某个远端要显式指定。
 - Claude Code 提的 commit，message 结尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
 
 ```bash

@@ -213,6 +213,7 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
 | 16 | **CI 自动化**：GitHub Actions（push / PR 触发）跑**框架单测** + 存 allure 产物；`scripts/notify.py` 跑完发钉钉 / 邮件 | ✅ |
 | 17 | **第二个被测系统**：短链平台（Java / Spring Cloud）—— 独立 `data/api_shortlink/` 目录 + 三个 fixture；225 条用例（166 绿 / 59 xfail）；框架为此补了 4 项能力（见「下一步」） | ✅ |
 | 18 | **让用例可反复跑**：快照差集清理 + 单接口公共前置改**只读** + 有依赖的流程挪进**场景** + 摘掉过时 xfail；**连跑两遍 187 绿 / 32 xfail / 0 红** | ✅ |
+| 19 | **接口用例进 Jenkins**：Gitee 源码 + `python:3.12` 容器跑 + JUnit 报告表格 + 构建完自动发钉钉；**构建 SUCCESS，耗时 89 秒** | ✅ |
 
 ---
 
@@ -331,6 +332,67 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 **⑰ 一次 `json.dumps` 能把整条脱敏废掉** —— 脱敏有两条路（**按字段名** / **按值特征**），**两条都要求"看到结构化数据"**。而 `http.py` 的 `_brief_body` 为了日志好看，把响应 `json.dumps` 成了字符串 —— **一序列化，结构就没了，两条路全断**。短链平台正好把 token 装在 `data` 字段里（key 不叫 `token`），于是**登录凭证明文落盘**。修法：**先脱敏、再序列化**（`json.dumps(mask(body), ...)`）。
 > **教训**：**"让日志好看"和"让日志安全"会互相拆台** —— 这两件事在代码里离得很远（一个在 `http.py` 的格式化，一个在 `logging/masking.py`），不真跑起来看不出来。改了日志的**呈现方式**，就要重验一遍**脱敏还灵不灵**。
+
+---
+
+## 接口用例怎么进 Jenkins
+
+**为什么是 Jenkins 不是 GitHub Actions**：这 219 条用例要连**内网的测试环境**（`TEST_GATEWAY_HOST:8888`），GitHub 的 runner 够不着。Jenkins 跑在工具机（`JENKINS_HOST`）上，和内网通 —— 这是它相对 GHA **唯一但决定性**的优势（UI 比 GHA 那套老派得多，配起来绕）。
+
+**job（`pytest-shortlink-api`，Freestyle）**：
+
+| 配置 | 值 |
+|---|---|
+| 源码管理 | Git → `https://gitee.com/li-peng-xiang-2315915034/pytest_practice.git`，分支 `*/develop` |
+| 构建触发器 | 手动（可加定时） |
+| 构建环境 | 绑定凭据 → 环境变量 `DINGTALK_WEBHOOK` / `DINGTALK_SECRET` |
+| Build step | 见下 |
+| 构建后操作 | Publish JUnit test result report → `reports/junit.xml` |
+
+**构建脚本**：
+
+```bash
+docker run --rm \
+  -v "$WORKSPACE":/app \
+  -v /data/pytest_venv:/venv \
+  -e DINGTALK_WEBHOOK -e DINGTALK_SECRET \
+  -w /app \
+  python:3.12-slim \
+  bash -c '
+    [ -x /venv/bin/python ] || python -m venv /venv
+    /venv/bin/pip install -q -r requirements.txt || exit 1
+    mkdir -p reports
+    /venv/bin/python -m pytest cases/ --junitxml=reports/junit.xml; rc=$?
+    /venv/bin/python scripts/notify.py reports/junit.xml || true
+    exit $rc
+  '
+```
+
+- **为什么起 `python:3.12` 容器**：Jenkins 容器里**没有 Python**（宿主机那个是 3.10）。起个 python 容器最省事，不用改 Jenkins 本身。
+- **`$WORKSPACE` 为什么能直接给 `docker run -v`**：Jenkins 容器当初是 `-v /data:/data` 挂进去的，容器里的工作区路径在宿主机上**是同一个路径**。
+- **`/data/pytest_venv`**：依赖装在这个挂载卷里，**第二次跑就快**（首次约 2 分钟，之后 20 秒）。
+- **`rc=$?` + `exit $rc`**：**用例失败时也要发通知**（失败时最需要它），发完再按原码退出 —— job 该红还是红。和 GHA 那边 `continue-on-error` + 判 `outcome` 同一个思路。
+- **`-e DINGTALK_WEBHOOK`**（不带值）：从宿主环境继承，值不落在 job 配置里。
+
+**踩过的三个坑**（都是「静默失败」型的，值得记）：
+
+1. **Jenkins 的 "Jenkins URL" 是空的** —— 不影响跑构建，但 **CLI 连接、通知里的链接**都会出错。系统配置里补上 `http://JENKINS_HOST:8080/`。
+2. **配置里写错类名前缀，Jenkins 会静默丢掉整块配置** —— 凭据绑定器的类名是 `org.jenkinsci.plugins.credentialsbinding.impl.SecretBuildWrapper`，先写成了 `hudson.plugins...`，POST 上去**返回 200、但回读发现被丢了**，构建日志里也没有绑定痕迹（`ShallowClone` 那次也是同样现象）。**教训：改完 job 配置一定要回读确认。**
+3. **GitHub 拉不动** —— 完整 clone 时 `fatal: expected flush after ref listing`，时好时坏（国内访问 GitHub 的常态）。**CI 的代码源不能是"看运气"的**，换 Gitee 秒级。
+
+**推代码要推两个远端**（GitHub 是主仓库，Gitee 是 Jenkins 的拉取源）：
+
+```bash
+# origin 的 push 已配成两个（fetch 仍走 GitHub）
+git remote -v
+#   origin  git@github.com:23lpx/pytest_practice.git (fetch)
+#   origin  git@gitee.com:li-peng-xiang-2315915034/pytest_practice.git (push)
+#   origin  git@github.com:23lpx/pytest_practice.git (push)
+# 之后一句 git push 同时推两边
+```
+
+> ⚠️ 配的时候有个坑：`git remote set-url --add --push` 会把**继承来的**那个 push 地址顶掉，
+> 所以要**显式把两个都 add 一遍**，否则只剩最后加的那个。
 
 ---
 
