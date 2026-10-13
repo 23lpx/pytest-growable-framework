@@ -4,6 +4,10 @@
 # 由 Excel 用例表转换而来，原始表见项目 docs/。
 # ⚠️ 第一条必须是「成功登录」—— conftest 的 shortlink_login fixture 取第一条，
 #    靠它的 extract 把 token 写进变量池。改顺序前先看这里。
+#
+# ⚠️ 下面几条「密码校验」用例里的字面量（Demo@Pwd1 / DEMO@PWD1 / Demo@Pwd12345678…）
+#    是**编的**，只为撑出「长度 17 位」「大小写颠倒」「中间含空格」这些形状，**不是真密码**。
+#    真密码只住在本地的 config/config.yaml 里，用例统一走 ${shortlink.pwd} 引用。
 base_info:
   api_name: login-login
   url: '/account-server/api/account/v1/login'
@@ -240,7 +244,7 @@ test_cases:
   - case_name: "密码校验：传 array"
     data:
       phone: "${shortlink.phone}"
-      pwd: ["CHANGE_ME_PWD"]
+      pwd: ["Demo@Pwd1"]
     validation:
       - contains:
           code: 110003
@@ -261,7 +265,7 @@ test_cases:
   - case_name: "密码校验：长度17位"
     data:
       phone: "${shortlink.phone}"
-      pwd: "CHANGE_ME_PWD7890xyz"
+      pwd: "Demo@Pwd12345678"
     validation:
       - contains:
           code: 250003
@@ -275,21 +279,21 @@ test_cases:
   - case_name: "密码校验：大小写颠倒"
     data:
       phone: "${shortlink.phone}"
-      pwd: "CHANGE_ME_PWD"
+      pwd: "DEMO@PWD1"
     validation:
       - contains:
           code: 250003
   - case_name: "密码校验：首尾含空格"
     data:
       phone: "${shortlink.phone}"
-      pwd: " CHANGE_ME_PWD "
+      pwd: " Demo@Pwd1 "
     validation:
       - contains:
           code: 250003
   - case_name: "密码校验：中间含空格"
     data:
       phone: "${shortlink.phone}"
-      pwd: "CHANGE_ME_PWD"
+      pwd: "Dem o@Pwd1"
     validation:
       - contains:
           code: 250003

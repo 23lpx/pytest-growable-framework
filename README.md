@@ -12,7 +12,7 @@
 
 | 项 | 值 |
 |---|---|
-| 地址 | `http://TEST_GATEWAY_HOST:8888`（经网关，服务不对外直连） |
+| 地址 | 见 `config/config.yaml` 的 `shortlink.base_url`（测试环境网关，不对外直连） |
 | 数据目录 | `data/api_shortlink/` |
 | 用例入口 | `cases/test_shortlink.py` |
 
@@ -30,14 +30,10 @@
 
 | 项 | 值 |
 |---|---|
-| 手机号 | `13800000000`（`config.shortlink.phone`） |
-| 密码 | `CHANGE_ME_PWD`（`config.shortlink.pwd`） |
+| 手机号 / 密码 | 配在 `config/config.yaml` 的 `shortlink` 段（**不入库**，见「配置」节） |
 | token 位置 | **请求头** `token: <JWT>` |
 
-（这两个值配在 `config/config.yaml` 的 `shortlink` 段，用例 yaml 用 `${shortlink.phone}` 引用，**不写死**。）
-
-⚠️ **鉴权用 token，不是 cookie** —— 登录响应里返回 `token` 字段，后续请求把它当**表单参数**传（不是放 header）。
-缺 token → `9001 新增失败，参数缺失或token失效`。
+（用例 yaml 用 `${shortlink.phone}` / `${shortlink.pwd}` 引用，**不写死** —— 真值只住在本地的 `config/config.yaml`，不进 git。）
 
 ### 接口三组
 
@@ -337,7 +333,7 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 ## 接口用例怎么进 Jenkins
 
-**为什么是 Jenkins 不是 GitHub Actions**：这 219 条用例要连**内网的测试环境**（`TEST_GATEWAY_HOST:8888`），GitHub 的 runner 够不着。Jenkins 跑在工具机（`JENKINS_HOST`）上，和内网通 —— 这是它相对 GHA **唯一但决定性**的优势（UI 比 GHA 那套老派得多，配起来绕）。
+**为什么是 Jenkins 不是 GitHub Actions**：这 219 条用例要连**内网的测试环境**（测试环境网关，见 `config`），GitHub 的 runner 够不着。Jenkins 跑在工具机上，和内网通 —— 这是它相对 GHA **唯一但决定性**的优势（UI 比 GHA 那套老派得多，配起来绕）。
 
 **job（`pytest-shortlink-api`，Freestyle）**：
 
@@ -376,7 +372,7 @@ docker run --rm \
 
 **踩过的三个坑**（都是「静默失败」型的，值得记）：
 
-1. **Jenkins 的 "Jenkins URL" 是空的** —— 不影响跑构建，但 **CLI 连接、通知里的链接**都会出错。系统配置里补上 `http://JENKINS_HOST:8080/`。
+1. **Jenkins 的 "Jenkins URL" 是空的** —— 不影响跑构建，但 **CLI 连接、通知里的链接**都会出错。系统配置里补上工具机的 `http://<工具机>:8080/`。
 2. **配置里写错类名前缀，Jenkins 会静默丢掉整块配置** —— 凭据绑定器的类名是 `org.jenkinsci.plugins.credentialsbinding.impl.SecretBuildWrapper`，先写成了 `hudson.plugins...`，POST 上去**返回 200、但回读发现被丢了**，构建日志里也没有绑定痕迹（`ShallowClone` 那次也是同样现象）。**教训：改完 job 配置一定要回读确认。**
 3. **GitHub 拉不动** —— 完整 clone 时 `fatal: expected flush after ref listing`，时好时坏（国内访问 GitHub 的常态）。**CI 的代码源不能是"看运气"的**，换 Gitee 秒级。
 
@@ -460,7 +456,7 @@ git remote -v
   （仓库 Settings → Secrets and variables → **Actions**，**不是 Environments**），
   没配的渠道自动跳过 —— 本地跑不会因为缺配置而报错。
 - ⚠️ **`cases/` 那 225 条接口用例还进不去 GitHub Actions**：它们要**外网的测试环境**
-  （`TEST_GATEWAY_HOST:8888`），GitHub 的 runner 够不着。接口那条链走 **Jenkins**
+  （测试环境网关），GitHub 的 runner 够不着。接口那条链走 **Jenkins**
   （在被测项目侧，工具机跑）—— 本仓的 GHA 只管**框架单测**。
 
 **CI 要在 GitHub 上配的 Secrets**（仓库 Settings → Secrets and variables → **Actions**，
@@ -585,12 +581,15 @@ http:
   timeout: 10
 
 shortlink:                       # 被测环境（经网关）
-  base_url: http://TEST_GATEWAY_HOST:8888
-  phone: "13800000000"           # 测试账号
-  pwd: CHANGE_ME_PWD
+  base_url: http://<测试环境网关>:8888
+  phone: "<测试账号手机号>"
+  pwd: "<测试账号密码>"
 
 # 另有两段见文件内注释：db（查库校验用的库）、masking（日志脱敏的档位与凭证特征）
 ```
+
+真值**不进文件**也能给 —— 用环境变量覆盖（`APP_` 前缀 + 双下划线分层）：
+`APP_SHORTLINK__PWD=xxx APP_SHORTLINK__PHONE=xxx`。CI / Jenkins 就走这条。
 
 用例里用 `${...}` 引用 —— 和变量池**同一套语法**，不用记两种：
 

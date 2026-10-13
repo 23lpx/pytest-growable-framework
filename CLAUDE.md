@@ -40,7 +40,7 @@ Windows 控制台中文乱码时加 `PYTHONIOENCODING=utf-8`。
 - **平时在 `develop` 分支开发**，一版做完再合进 `main`。
 - `main` 只放「已完成的版本」，**不直接在 main 上开发 / 提交**。
 - 提交前 `pytest` 要绿。
-- 推上去后 **GitHub Actions 跑框架单测**（`.github/workflows/ci.yml`）；**接口用例走 Jenkins**（工具机 `JENKINS_HOST`）—— 用例要连**内网**的测试环境，GHA 的 runner 够不着，Jenkins 和内网通。配置细节见 README「接口用例怎么进 Jenkins」。
+- 推上去后 **GitHub Actions 跑框架单测**（`.github/workflows/ci.yml`）；**接口用例走 Jenkins**（工具机）—— 用例要连**内网**的测试环境，GHA 的 runner 够不着，Jenkins 和内网通。配置细节见 README「接口用例怎么进 Jenkins」。
 - ⚠️ **`git push` 会同时推 GitHub 和 Gitee**（`origin` 配了两个 push 地址）：GitHub 是主仓库，Gitee 是 **Jenkins 的拉取源** —— **只推 GitHub 的话，Jenkins 跑的还是旧代码**。想单独推某个远端要显式指定。
 - Claude Code 提的 commit，message 结尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
 
@@ -217,9 +217,9 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 
 ## 被测服务
 
-**商用短链平台**（Java / Spring Cloud 多模块），**经网关** `http://TEST_GATEWAY_HOST:8888`（配置在 `config.shortlink`）。**服务器按需开关**，连不上先确认那两台机器开着。
+**商用短链平台**（Java / Spring Cloud 多模块），**经网关**（地址见 `config/config.yaml` 的 `shortlink.base_url`）。**服务器按需开关**，连不上先确认那两台机器开着。
 
-- **仓库在 Gitee**（不是 GitHub）—— 它的 CI/CD 用 **Jenkins**（工具机 `JENKINS_HOST`），不是 GitHub Actions（**GHA 够不着 Gitee**）。细节见那个项目自己的文档
+- **仓库在 Gitee**（不是 GitHub）—— 它的 CI/CD 用 **Jenkins**（工具机），不是 GitHub Actions（**GHA 够不着 Gitee**）。细节见那个项目自己的文档
 - **鉴权**：token 放**请求头**（`token: <JWT>`），登录接口免登录；缺/错 token → `250004 账号未登录`
 - **成功判据是 `code=0`** —— 业务失败**也是 HTTP 200**，**只看响应体的 code**
 - **路径参数**用 `path_params`（见「一条用例能写哪些字段」），如 `/detail/{groupId}` + `path_params: {groupId: "${g1_id}"}`
