@@ -11,7 +11,7 @@ base_info:
 
 test_cases:
   - case_name: "更新：改标题"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+    xfail: "待补：需要一条真短链（可加进 cases/test_shortlink_flow.py）"
     headers:
       token: "${token}"
     data:
@@ -22,7 +22,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "更新：改域名"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+    xfail: "待补：需要一条真短链（可加进 cases/test_shortlink_flow.py）"
     headers:
       token: "${token}"
     data:
@@ -44,7 +44,7 @@ test_cases:
       - contains:
           code: 110003
   - case_name: "更新：请求里的 code 与库中不一致"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
+    xfail: "待补：需要一条真短链（可加进 cases/test_shortlink_flow.py）"
     headers:
       token: "${token}"
     data:

@@ -1,19 +1,15 @@
 # 商用短链平台 · group 域 —— POST /link-server/api/group/v1/add
 #
 # 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
-# 由 Excel 用例表转换而来，原始表见项目 docs/。
-base_info:
-  api_name: group-add
-  url: '/link-server/api/group/v1/add'
-  method: POST
-  headers:
-    'Content-Type': 'application/json'
-
-test_cases:
-# 商用短链平台 · group 域 —— POST /link-server/api/group/v1/add
 #
-# 契约速记：成功 code=0、msg=null；失败也是 HTTP 200，成败只看 code。
-# 由 Excel 用例表转换而来，原始表见项目 docs/。
+# ⚠️ 「重名判重」那几条（同账号重名 / 尾随空格 / 大小写不同 / 同名竞态）**已移进
+#    `data/scenarios/group_duplicate_name.yaml`** —— 判重必须对「**已存在的组**」再建
+#    才验得出来，而单接口一条用例只能发一个请求、表达不了"先有个组"这个前提；
+#    硬靠用例执行顺序又不可靠（pytest 的顺序不保证）。
+#
+# ⚠️ 下面"建成功"的那批（特殊字符 / 超长 / 注入串…）**曾经挂着 xfail**，理由是
+#    "分组是物理删除、跑完不清理，第二遍必撞车"。加了 `cleanup_test_data`（快照差集
+#    清理）之后它们真能过了，xfail 已摘。
 base_info:
   api_name: group-add
   url: '/link-server/api/group/v1/add'
@@ -30,34 +26,8 @@ test_cases:
     validation:
       - contains:
           code: 0
-  - case_name: "创建分组：同账号重名"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
-    headers:
-      token: "${token}"
-    data:
-      title: "g1"
-    validation:
-      - contains:
-          code: 23001
-  - case_name: "创建分组：大小写不同不算重名"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
-    headers:
-      token: "${token}"
-    data:
-      title: "G1"
-    validation:
-      - contains:
-          code: 0
-  - case_name: "创建分组：尾随空格算重名"
-    headers:
-      token: "${token}"
-    data:
-      title: "g1 "
-    validation:
-      - contains:
-          code: 23001
   - case_name: "创建分组：不同账号可以同名"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+    xfail: "缺测试账号：需要第二个账号才能验跨账号同名（测试环境未提供）"
     headers:
       token: "${token_b}"
     data:
@@ -106,7 +76,7 @@ test_cases:
       - contains:
           code: 110003
   - case_name: "创建分组：title 传 number"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -131,7 +101,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "创建分组：title 长度 255（表上限，边界内）"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -149,7 +119,7 @@ test_cases:
       - contains:
           code: 110003
   - case_name: "创建分组：title 含中文与 emoji"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -179,16 +149,8 @@ test_cases:
     validation:
       - contains:
           code: 0
-  - case_name: "创建分组：并发同时建同名（竞态）"
-    headers:
-      token: "${token}"
-    data:
-      title: "race"
-    validation:
-      - contains:
-          code: 23001
   - case_name: "安全-SQL注入：title 万能密码"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -197,7 +159,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "安全-SQL注入：title 联合查询"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -206,7 +168,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "安全-SQL注入：title DDL 注入"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -215,7 +177,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "安全-XSS：title 含 script 标签"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -224,7 +186,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "安全-XSS：title 含 img onerror"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -233,7 +195,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "特殊字符：title 前导空格"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -242,7 +204,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "特殊字符：title 首尾都有空格"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -251,7 +213,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "特殊字符：title 含换行与制表符"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -260,7 +222,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "特殊字符：title 含 NUL（\\u0000）"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -269,7 +231,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "特殊字符：title 为通配符 % 和 _"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:
@@ -278,7 +240,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "超长：title 为 255 个 emoji（4 字节/字符）"
-    xfail: "前置未就绪：分组是物理删除、跑完不清理，title 固定则重跑必撞车（缺数据清理机制）"
+
     headers:
       token: "${token}"
     data:

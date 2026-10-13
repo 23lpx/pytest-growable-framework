@@ -81,7 +81,7 @@ src/pytest_framework/
 
 ```
 data/api_shortlink/*.yaml  ← 单接口（dict：base_info + test_cases）
-data/scenarios/*.yaml      ← 场景（list：N 个接口块）⚠️ **当前无数据文件**（用例已归档）
+data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执行顺序**）
    │
    ├─ 单接口 ── CaseModel.discover() 扫目录
    │     │  adapters/reader.YamlRead.read
@@ -119,9 +119,9 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块）⚠️ **当前�
 | | 发现 | 展平？ | 结果粒度 | 谁在用 |
 |---|---|---|---|---|
 | 单接口 | `CaseModel.discover()` → `ExecuteCase.discover()` | ✅ 展平 | **一条 case 一个节点** | 数据驱动**主力**（量大、独立） |
-| 场景 | `ScenarioModel.discover()` | ❌ 不展平 | **一个场景一个节点** | 只做**简单线性**流程 |
+| 场景 | `ScenarioModel.discover()` | ❌ 不展平 | **一个场景一个节点** | 有**先后关系**的流程（分组生命周期、重名判重） |
 
-**加数据文件 = 加用例，代码一个字不改** —— `cases/` 里只有一个文件 `test_shortlink.py`，它把 `data/api_shortlink/` 下的用例**展平**成 pytest 节点。粒度差别就在「要不要展平」这一处。
+**加数据文件 = 加用例，代码一个字不改** —— `cases/test_shortlink.py` 把 `data/api_shortlink/` 下的用例**展平**成 pytest 节点，`cases/test_scenario.py` 则把 `data/scenarios/` 的每条场景收成**一个**节点。粒度差别就在「要不要展平」这一处。
 
 **两条路径，一个执行器**：单接口用 pytest 参数化展开成 N 个节点，场景用 `ScenarioRunner` 收成 1 个节点。两者最终都调 `CaseRunner.run(case)` —— **它永远只跑一条，不认识"列表"、也不认识"场景"**。循环策略归调用方，执行能力归 `CaseRunner`。
 
@@ -165,7 +165,7 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块）⚠️ **当前�
 
 | 目录 | 干什么 |
 |---|---|
-| `cases/` | **只有一个文件**：`test_shortlink.py`（收短链平台的单接口用例）。**加数据文件 = 加用例** |
+| `cases/` | 测试入口，三个文件：`test_shortlink.py`（单接口，数据驱动）/ `test_scenario.py`（场景）/ `test_shortlink_flow.py`（逃生舱 —— 流程里有轮询等待的那种）。**加数据文件 = 加用例** |
 | `src/pytest_framework/` | **框架本体**，按架构层分目录：`entities/` `ports/` `usecases/` `adapters/` `infrastructure/` |
 | `tests/` | **框架自身的单测**。不在 `testpaths` 里，要显式 `pytest tests/` |
 | `data/api_shortlink/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
@@ -212,6 +212,8 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块）⚠️ **当前�
 | 15 | **查库校验**：`ports.QueryExecutor`（只读）+ `DbChecker` + pymysql 底座；yaml 加 `db:` 段 —— 数据校验从「看响应」扩到「看库」 | ✅ |
 | 16 | **CI 自动化**：GitHub Actions（push / PR 触发）跑**框架单测** + 存 allure 产物；`scripts/notify.py` 跑完发钉钉 / 邮件 | ✅ |
 | 17 | **第二个被测系统**：短链平台（Java / Spring Cloud）—— 独立 `data/api_shortlink/` 目录 + 三个 fixture；225 条用例（166 绿 / 59 xfail）；框架为此补了 4 项能力（见「下一步」） | ✅ |
+| 18 | **让用例可反复跑**：快照差集清理 + 单接口公共前置改**只读** + 有依赖的流程挪进**场景** + 摘掉过时 xfail；**连跑两遍 187 绿 / 32 xfail / 0 红** | ✅ |
+| 19 | **接口用例进 Jenkins**：Gitee 源码 + `python:3.12` 容器跑 + JUnit 报告表格 + 构建完自动发钉钉；**构建 SUCCESS，耗时 89 秒** | ✅ |
 
 ---
 
@@ -224,6 +226,9 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块）⚠️ **当前�
 # 本地验一次通知（不配环境变量就只打印消息、不发）
 ./.venv/Scripts/python.exe -m pytest tests/ --junitxml=reports/junit.xml
 ./.venv/Scripts/python.exe scripts/notify.py reports/junit.xml
+
+# 兜底清理测试数据（无差别清空专用账号名下的分组/短链 —— 自动清理失灵时用）
+./.venv/Scripts/python.exe scripts/clean_testdata.py
 
 # 换环境：临时指到别的服务地址（优先级：命令行 > 环境变量 > config/config.yaml）
 ./.venv/Scripts/python.exe -m pytest -k login
@@ -330,15 +335,91 @@ APP_LOGIN__PASSWORD=xxx ./.venv/Scripts/python.exe -m pytest
 
 ---
 
+## 接口用例怎么进 Jenkins
+
+**为什么是 Jenkins 不是 GitHub Actions**：这 219 条用例要连**内网的测试环境**（`TEST_GATEWAY_HOST:8888`），GitHub 的 runner 够不着。Jenkins 跑在工具机（`JENKINS_HOST`）上，和内网通 —— 这是它相对 GHA **唯一但决定性**的优势（UI 比 GHA 那套老派得多，配起来绕）。
+
+**job（`pytest-shortlink-api`，Freestyle）**：
+
+| 配置 | 值 |
+|---|---|
+| 源码管理 | Git → `https://gitee.com/li-peng-xiang-2315915034/pytest_practice.git`，分支 `*/develop` |
+| 构建触发器 | 手动（可加定时） |
+| 构建环境 | 绑定凭据 → 环境变量 `DINGTALK_WEBHOOK` / `DINGTALK_SECRET` |
+| Build step | 见下 |
+| 构建后操作 | Publish JUnit test result report → `reports/junit.xml` |
+
+**构建脚本**：
+
+```bash
+docker run --rm \
+  -v "$WORKSPACE":/app \
+  -v /data/pytest_venv:/venv \
+  -e DINGTALK_WEBHOOK -e DINGTALK_SECRET \
+  -w /app \
+  python:3.12-slim \
+  bash -c '
+    [ -x /venv/bin/python ] || python -m venv /venv
+    /venv/bin/pip install -q -r requirements.txt || exit 1
+    mkdir -p reports
+    /venv/bin/python -m pytest cases/ --junitxml=reports/junit.xml; rc=$?
+    /venv/bin/python scripts/notify.py reports/junit.xml || true
+    exit $rc
+  '
+```
+
+- **为什么起 `python:3.12` 容器**：Jenkins 容器里**没有 Python**（宿主机那个是 3.10）。起个 python 容器最省事，不用改 Jenkins 本身。
+- **`$WORKSPACE` 为什么能直接给 `docker run -v`**：Jenkins 容器当初是 `-v /data:/data` 挂进去的，容器里的工作区路径在宿主机上**是同一个路径**。
+- **`/data/pytest_venv`**：依赖装在这个挂载卷里，**第二次跑就快**（首次约 2 分钟，之后 20 秒）。
+- **`rc=$?` + `exit $rc`**：**用例失败时也要发通知**（失败时最需要它），发完再按原码退出 —— job 该红还是红。和 GHA 那边 `continue-on-error` + 判 `outcome` 同一个思路。
+- **`-e DINGTALK_WEBHOOK`**（不带值）：从宿主环境继承，值不落在 job 配置里。
+
+**踩过的三个坑**（都是「静默失败」型的，值得记）：
+
+1. **Jenkins 的 "Jenkins URL" 是空的** —— 不影响跑构建，但 **CLI 连接、通知里的链接**都会出错。系统配置里补上 `http://JENKINS_HOST:8080/`。
+2. **配置里写错类名前缀，Jenkins 会静默丢掉整块配置** —— 凭据绑定器的类名是 `org.jenkinsci.plugins.credentialsbinding.impl.SecretBuildWrapper`，先写成了 `hudson.plugins...`，POST 上去**返回 200、但回读发现被丢了**，构建日志里也没有绑定痕迹（`ShallowClone` 那次也是同样现象）。**教训：改完 job 配置一定要回读确认。**
+3. **GitHub 拉不动** —— 完整 clone 时 `fatal: expected flush after ref listing`，时好时坏（国内访问 GitHub 的常态）。**CI 的代码源不能是"看运气"的**，换 Gitee 秒级。
+
+**推代码要推两个远端**（GitHub 是主仓库，Gitee 是 Jenkins 的拉取源）：
+
+```bash
+# origin 的 push 已配成两个（fetch 仍走 GitHub）
+git remote -v
+#   origin  git@github.com:23lpx/pytest_practice.git (fetch)
+#   origin  git@gitee.com:li-peng-xiang-2315915034/pytest_practice.git (push)
+#   origin  git@github.com:23lpx/pytest_practice.git (push)
+# 之后一句 git push 同时推两边
+```
+
+> ⚠️ 配的时候有个坑：`git remote set-url --add --push` 会把**继承来的**那个 push 地址顶掉，
+> 所以要**显式把两个都 add 一遍**，否则只剩最后加的那个。
+
+---
+
 ## 下一步
 
-**⑰ 第二个被测系统**（进度表 17）—— 短链平台接入完成，**欠的全是外部条件**：
+**⑱ 让用例可反复跑**（进度表 18）—— **已完成**：
+
+- **数据清理**（测试侧自己解决，没等开发）：`cleanup_test_data` 快照差集；另配 `scripts/clean_testdata.py` 兜底清存量
+- **单接口独立**：公共前置 `${g1_id}` 改**只读**，会删改它的 6 条一律移进场景
+- **场景化**：`data/scenarios/` 两条分组场景 + `cases/test_shortlink_flow.py` 一个短链逃生舱
+- 摘掉 22 条过时 xfail（清理生效 / 前置稳定后它们真能过），删 4 条重复的重名语义
+
+**这一轮揪出来的"碰巧过"用例**（都靠脏数据撑着，清一次库就全挂）—— 值钱的教训：
+
+| 用例 | 假象 | 真相 |
+|---|---|---|
+| `创建分组：并发同时建同名（竞态）` | 绿 | 靠账号里**残留的 `race`**；清干净后建 race 得 `0` —— 判据本身就不成立（串行跑不出竞态）→ **删** |
+| `更新分组：改成另一个已有分组的名字` | 绿 | 靠 `g1` **被别人删了**；实测更新接口**不查重**（返回 `0`）→ **按实测收进场景** |
+| `建链：expired 格式非法` | 红（挂错理由） | 实测服务端**不校验** expired 格式、照收 → **按实测改期望** |
+
+> **教训**：上次总结过「测出来的差异，先排除是不是我数据不对」—— 这次是它的**反面**：
+> **"看起来绿"也可能是脏数据撑的**。清一遍库再跑，才看得出哪些用例是真独立的。
+
+**还剩两件外部条件**（写在被测项目侧的 `docs/测试环境需求-给开发.md`）：
 
 - **第二测试账号**（卡 8 条越权用例）—— 注册要短信验证码、自动化造不出来，得开发在环境里预置
-- **数据清理机制** —— 分组是**物理删除**且跑完不清理，title 固定的用例**第二次跑必撞车**
-- **流量额度** —— 免费包一天 3 条，建链用例跑一轮就耗光
-
-三项都写进了被测项目侧的 `docs/测试环境需求-给开发.md`。
+- **流量额度** —— 免费包一天 3 条（本轮实测：建链用例连跑两遍都过，额度够；长期跑要盯）
 
 **框架侧这一轮补的 4 项能力**（都是"测第二个系统"撞出来的**真实缺口**，不是为某张表打的补丁）：
 
@@ -420,42 +501,75 @@ data:
 
 ---
 
-## 业务场景怎么用（阶段 10 产物）
+## 业务场景怎么用
 
 单接口 yaml 根节点是 **dict**；**场景 yaml 根节点是列表**，每个元素是一个「单接口形态」的块，**顺序即执行顺序**：
 
 ```yaml
-# data/scenarios/xxx.yaml
-- base_info: { api_name: 登录, url: /coupApply/cms/login_dw, method: POST, headers: {…} }
+# data/scenarios/group_lifecycle.yaml（节选）
+- base_info: { api_name: group-add, url: '/link-server/api/group/v1/add', method: POST, headers: {'Content-Type': 'application/json'} }
   test_cases:
-    - case_name: 登录
-      data: { username: test123, password: qwe666 }
-      extract: { user_token: $.data.user_token }     # 提取给后面用
-- base_info: { api_name: 商品列表, url: /coupApply/cms/goodsList, method: GET, headers: {…} }
+    - case_name: 创建分组
+      data: { title: lifecycle_g }
+- base_info: { api_name: group-list, url: '/link-server/api/group/v1/list', method: GET, … }
   test_cases:
-    - case_name: 获取商品列表
-      data: { msgType: getHandsetListOfCust, page: 1, size: 20 }
-      extract: { goods_id: $.goodsList[0].goodsId }
-- # … 后续步骤引用 ${goods_id}
+    - case_name: 查出新建组的 id
+      extract: { life_id: "$.data[0].id" }   # 提取给后面用（列表按 id 倒序，刚建的在第一个）
+- # … 后续步骤用 ${life_id} 引用
 ```
 
-对应的测试文件里就是**一个函数**（一个场景 = 一个 pytest 节点）：
+对应的测试文件里就是**一个函数收掉所有场景**（一个场景 = 一个 pytest 节点）：
 
 ```python
-# cases/test_scenario.py —— 一个函数收掉**所有**场景
+# cases/test_scenario.py
 class TestScenario:
     @pytest.mark.parametrize("scenario", ScenarioModel.discover(), ids=lambda s: s.name)
-    def test_scenario(self, scenario, client, context):
-        ScenarioRunner(client, context).run(scenario)
+    def test_scenario(self, scenario, shortlink_client, context,
+                      shortlink_login, cleanup_test_data):
+        ScenarioRunner(shortlink_client, context).run(scenario)
 ```
 
 - **顺序由数据控制**（yaml 列表顺序），**不靠 pytest 收集顺序** —— 这是和单接口最大的区别。
-- **步骤间传值靠变量池**（`${user_token}` / `${goods_id}`），同一套机制，没有第二套。
-- **不需要 `login` fixture** —— 顺序天然成立，「前置」就是第一步。
-- **失败定位**：报错里带 `步骤=3/5 商品详情`（`ScenarioRunner` 补的上下文），一眼看出断在哪步。
+- **步骤间传值靠变量池**（`${life_id}`），同一套机制，没有第二套。
+- **`shortlink_login` 还得挂**（token 是全局前置，不是业务步骤）；但**不用 `shortlink_prepare`** —— 场景的"前置"就是它自己的第一步。
+- **失败定位**：报错里带 `步骤=N/M 接口名`（`ScenarioRunner` 补的上下文），一眼看出断在哪步。
 - **代价**：`-k` / `-m` / 重跑只能按**场景粒度**，筛不到单个 step。
 
+**三种写法怎么选**：
+
+| 特征 | 去哪 |
+|---|---|
+| 一条用例自己就能跑完、不依赖别人改过的状态 | **单接口** `data/api_shortlink/` |
+| 步骤有先后（建了再查、改完再删、重名判重） | **场景** `data/scenarios/` |
+| 流程里有 **if / 循环 / 等待**（如轮询等 MQ 消费） | **逃生舱** `cases/test_shortlink_flow.py`（直接写 Python） |
+
+> 判据一句话：**流程线性的 → yaml；有 如果/循环/等待 → 代码**。
+
 **为什么复用 `CaseModel`**：场景的一个 step = 单接口 yaml 的完整形态，所以 `ScenarioModel` 直接拿 `CaseModel` 解析每个元素（`CaseModel.from_dict`）——「组合」而不是「另造一套」。同理 `ScenarioRunner` 内部调 `CaseRunner`，不重写四步。
+
+---
+
+## 数据清理怎么用
+
+**问题**：分组是**物理删除**、跑完不清理 → title 固定的用例**第二次跑必撞** `23001 分组名重复`；短链是逻辑删，数据越积越多。**用例集于是成了"一次性"的。**
+
+**做法：快照差集**。`conftest` 的 `cleanup_test_data` fixture 在会话前后各记一份「账号下分组/短链的 id 快照」，收尾时把**新增的**全删掉：
+
+```
+setup:    GET /group/v1/list  → before_groups
+          POST /link/v1/page  → before_links
+yield     ← 跑用例
+teardown: 再查一次 → 差集 = after - before
+          先删短链（POST /link/v1/del）→ 再删分组（DELETE /group/v1/del/{id}）
+```
+
+- **为什么不按 title 前缀扫**：有一批用例的 title **本身就是测试点**（255 个字符、SQL 注入串、前导空格），加不了任何前缀；按 id 做差集完全不看 title 长什么样。
+- **`add` 不返回 id、建链还是异步的**：所以只能靠 `list` / `page` 查；建链要等 MQ 消费，收网前**多查几轮**把漏的补上。
+- ⚠️ **不是 autouse**：根 conftest 的 autouse fixture 会连 `tests/` 的框架单测一起触发，把「零外部依赖」毁掉 —— 所以**显式挂**在用例文件上（同坑 ⑭）。
+- ⚠️ **前提：测试账号是专用的**。差集假设「跑前没有、跑后有了」＝ 本次造的；有别人往这个账号写数据会被误删。
+- **清理失败只记 warning**，不改测试结论（清理是善后，网络抖动不该让绿的变红）；残留用 `scripts/clean_testdata.py` 兜底 —— 它**无差别清空**账号数据，所以只对专用账号安全。
+
+**公共前置是只读的**：`shortlink_prepare` 造的分组用 `${g1_id}` 引用，**任何用例不许删它、改它**（fixture 自己跑完会收尾删掉）。会删改分组的用例一律走**场景** —— 这是「单接口互不依赖」的落地方式。
 
 ---
 

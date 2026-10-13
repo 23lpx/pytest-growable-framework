@@ -40,7 +40,8 @@ Windows 控制台中文乱码时加 `PYTHONIOENCODING=utf-8`。
 - **平时在 `develop` 分支开发**，一版做完再合进 `main`。
 - `main` 只放「已完成的版本」，**不直接在 main 上开发 / 提交**。
 - 提交前 `pytest` 要绿。
-- 推上去后 GitHub Actions 会跑**框架单测**（`.github/workflows/ci.yml`）—— **接口用例不在 CI 里**（它要外网的测试环境，GitHub 的 runner 够不着；接口那条链走 **Jenkins**，在被测项目侧）。
+- 推上去后 **GitHub Actions 跑框架单测**（`.github/workflows/ci.yml`）；**接口用例走 Jenkins**（工具机 `JENKINS_HOST`）—— 用例要连**内网**的测试环境，GHA 的 runner 够不着，Jenkins 和内网通。配置细节见 README「接口用例怎么进 Jenkins」。
+- ⚠️ **`git push` 会同时推 GitHub 和 Gitee**（`origin` 配了两个 push 地址）：GitHub 是主仓库，Gitee 是 **Jenkins 的拉取源** —— **只推 GitHub 的话，Jenkins 跑的还是旧代码**。想单独推某个远端要显式指定。
 - Claude Code 提的 commit，message 结尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
 
 ```bash
@@ -81,7 +82,7 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
    │     每条 case 一个节点（保住 -k / -m / 重跑 / -n）
    │
    └─ 场景 ── ScenarioModel.discover() 扫目录（**不展平**）
-         ⚠️ 场景**代码还在**（含框架单测），但**已经没有用例在用它**
+         ✅ **有先后关系的流程走这里**：`data/scenarios/group_*.yaml`
             —— 原来那套 flaskServer 电商场景已归档到 `archive/`
          │  adapters/reader.YamlRead.read
          ▼
@@ -130,11 +131,11 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
 | `infrastructure/path.py` | `_project_root()`，定位项目根 |
 | `infrastructure/db.py` | MySQL 底座（pymysql / DictCursor / 断线重连）。**不认识测试概念**，只认 SQL |
 | **仓库其余部分** | |
-| `cases/` | 测试用例：`test_shortlink.py`（短链平台单接口）。**加数据文件 = 加用例，不用写测试函数** |
+| `cases/` | 测试用例：`test_shortlink.py`（单接口，数据驱动）/ `test_scenario.py`（场景）/ `test_shortlink_flow.py`（逃生舱 —— 流程里有轮询等待的那种）。**加数据文件 = 加用例，不用写测试函数** |
 | `tests/` | **框架自身的单测**（不依赖被测服务）。裸跑 pytest 收不到，要 `pytest tests/` |
 | `data/api_shortlink/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
 | `archive/` | **归档区**：不再维护、pytest 也收不到（`testpaths = cases`）。现在装的是 flaskServer 那套。见 `archive/README.md` |
-| `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序）。⚠️ **当前没有数据文件** —— 场景代码还在，用例已归档 |
+| `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序）。**有先后关系的流程放这儿**（如分组生命周期、重名判重）；一个场景 = 一个 pytest 节点 |
 | `config/config.yaml` | **环境配置**（base_url / timeout / 账号）。换环境只改这份。真实项目该进 `.gitignore` |
 | `pyproject.toml` | 打包声明（src-layout 的包在 `src/` 下）+ 依赖清单 |
 | `tools/` | 本地工具（allure 命令行），**不进 git**。各人自己解压一份 |
@@ -161,7 +162,12 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
 
 **占位符替换必须产副本**：`resolve_case()` 返回 `ResolvedCase`，**绝不就地改原 case** —— `ExecuteCase` 是收集阶段构造、整个 session 共用的（含 `--reruns`），就地改会让第二遍跑到第一遍留下的脏数据。
 
-**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就写 `conftest` 的 fixture —— `shortlink_login`（登一次写 token）/ `shortlink_prepare`（造分组、域名），`cases/test_shortlink.py` 把它们挂给了所有用例（session 级只跑一次，零成本）。
+**跨用例关联靠 fixture，不靠执行顺序**：pytest 按**文件名字典序**收集，"登录先跑"天然不成立。要前置数据就写 `conftest` 的 fixture —— `shortlink_login`（登一次写 token）/ `shortlink_prepare`（造**只读**的公共前置：专用分组 + 官方域名），`cases/test_shortlink.py` 把它们挂给了所有用例（session 级只跑一次，零成本）。
+
+**公共前置只读，跑完要清理 —— 这是「用例可反复跑」的两块地基**：
+
+- **只读前置**：`shortlink_prepare` 建的 `${g1_id}` 谁都不许删、不许改 —— 会删改分组的用例一律走**场景**（自己造一次性数据）。这是「单接口互不依赖」的落地方式：依赖一个**稳定的只读前置**不算互相依赖，依赖一个**会被别人改掉的状态**才是（曾出过事：`group_delete` 按字典序排第一，把 fixture 建的组删了，后面 31 条引用它的用例全断）。
+- **快照差集清理**：`cleanup_test_data` fixture 在会话前后各记一份「账号下分组/短链的 id 快照」，**差集 = 本次造的一律删**（先短链、后分组）。**为什么不按 title 前缀扫**：有一批用例的 title 本身就是测试点（255 个字符、SQL 注入串、前导空格），加不了前缀；按 id 做差集完全不看 title 长什么样。⚠️ 它**不是 autouse**（根 conftest 的 autouse 会连 `tests/` 的框架单测一起触发，把「零外部依赖」毁掉），**要显式挂**。清理失败只记 warning、不改测试结论；残留用 `scripts/clean_testdata.py` 兜底。
 
 **数据驱动的边界（用户定调，别越界）**：**单接口是数据驱动主力**（量大、独立、一条 case 一个节点）；**场景只做简单线性流程** —— 场景 yaml 里**不许出现 if / 分支 / 循环**。需要流程控制的（重试、等待、条件跳过）**用代码写**（在 `cases/` 里直接写 test 函数调 `CaseRunner`，即"逃生舱"，和数据用例共存）。判据：**流程线性的 → yaml；有 如果/循环/等待 → 代码**。
 
@@ -217,7 +223,7 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 - **鉴权**：token 放**请求头**（`token: <JWT>`），登录接口免登录；缺/错 token → `250004 账号未登录`
 - **成功判据是 `code=0`** —— 业务失败**也是 HTTP 200**，**只看响应体的 code**
 - **路径参数**用 `path_params`（见「一条用例能写哪些字段」），如 `/detail/{groupId}` + `path_params: {groupId: "${g1_id}"}`
-- **公共前置**由 `shortlink_prepare` fixture 造：`g1` 分组 + 官方域名 → 变量池 `${g1_id}` / `${domain_id}`
+- **公共前置**由 `shortlink_prepare` fixture 造（**只读**）：一个专用分组 + 官方域名 → 变量池 `${g1_id}` / `${domain_id}`。**用例不许删它、改它** —— 要删改分组就走场景；fixture 跑完自己把它删掉
 - **契约模糊点与已知缺陷**都记在 yaml 的注释 / `xfail` 里 —— 改这批用例前先看那两处，别把「已知的」当成「新发现的」
 
 ### 归档：flaskServer（研发期的靶场）

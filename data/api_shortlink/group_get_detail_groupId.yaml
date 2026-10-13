@@ -12,7 +12,6 @@ base_info:
 
 test_cases:
   - case_name: "分组详情：查自己的分组"
-    xfail: "缺前置数据：需要先有分组/短链（前置构造未就绪）"
     headers:
       token: "${token}"
     path_params:
@@ -98,7 +97,7 @@ test_cases:
     headers:
       token: "${token}"
     path_params:
-      groupId: "${sql_payload}"
+      groupId: "' OR '1'='1"
     data:
       {}
     validation:

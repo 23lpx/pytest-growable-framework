@@ -1,0 +1,135 @@
+# 场景：分组生命周期 —— 建 → 查 → 改 → 验 → 删 → 再删
+#
+# **为什么进场景**：这几步天然有先后 —— 改名前得先有组、"再删一次"依赖前一步**真删掉了**。
+# 单接口的用例之间不能有这种依赖：靠执行顺序最脆，而 pytest 的顺序本来就不保证。
+#
+# 场景自带清理（第 7 步把组删掉），跑完不留残留。
+#
+# 收纳的原单接口用例：「删除分组：正常删除」「删除分组：重复删除已删的分组」
+#   「更新分组：正常改名」。原「更新分组：id 传字符串形式的数字」**没搬** ——
+#   list 返回的 id 本来就是字符串，它和「正常改名」实测等价，没有独立信息量。
+#
+# ⚠️ 断言的限制：框架的 `contains` 只比对**顶层**键值对（`dict.items() <=`），验不了
+#   响应里嵌套的 `data.title` 这类字段。所以"改名生效了吗"这一步只能验 `code=0`
+#   （详情还查得到），验不了新名字 —— 要验嵌套字段得等断言层支持 jsonpath 路径。
+
+# 第 1 步：建一个组
+- base_info:
+    api_name: group-add
+    url: '/link-server/api/group/v1/add'
+    method: POST
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 创建分组
+      headers:
+        token: "${token}"
+      data:
+        title: "lifecycle_g"
+      validation:
+        - contains:
+            code: 0
+
+# 第 2 步：查出它的 id（列表按 id 倒序，刚建的在第一个）
+- base_info:
+    api_name: group-list
+    url: '/link-server/api/group/v1/list'
+    method: GET
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 查出新建组的 id
+      headers:
+        token: "${token}"
+      data:
+        {}
+      extract:
+        life_id: "$.data[0].id"
+      validation:
+        - contains:
+            code: 0
+
+# 第 3 步：详情查得到
+- base_info:
+    api_name: group-{groupId}
+    url: '/link-server/api/group/v1/detail/{groupId}'
+    method: GET
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 详情查得到
+      headers:
+        token: "${token}"
+      path_params:
+        groupId: "${life_id}"
+      data:
+        {}
+      validation:
+        - contains:
+            code: 0
+
+# 第 4 步：改名
+- base_info:
+    api_name: group-update
+    url: '/link-server/api/group/v1/update'
+    method: PUT
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 正常改名
+      headers:
+        token: "${token}"
+      data:
+        id: "${life_id}"
+        title: "lifecycle_g2"
+      validation:
+        - contains:
+            code: 0
+
+# 第 5 步：改名后再查详情 —— 组还在（嵌套字段验不了，只能验这个）
+- base_info:
+    api_name: group-{groupId}
+    url: '/link-server/api/group/v1/detail/{groupId}'
+    method: GET
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 改名后仍查得到
+      headers:
+        token: "${token}"
+      path_params:
+        groupId: "${life_id}"
+      data:
+        {}
+      validation:
+        - contains:
+            code: 0
+
+# 第 6-7 步：删掉、再删一次（第二次该报"分组不存在"）
+- base_info:
+    api_name: group-del
+    url: '/link-server/api/group/v1/del/{groupId}'
+    method: DELETE
+    headers:
+      'Content-Type': 'application/json'
+  test_cases:
+    - case_name: 正常删除
+      headers:
+        token: "${token}"
+      path_params:
+        groupId: "${life_id}"
+      data:
+        {}
+      validation:
+        - contains:
+            code: 0
+    - case_name: 重复删除已删的组
+      headers:
+        token: "${token}"
+      path_params:
+        groupId: "${life_id}"
+      data:
+        {}
+      validation:
+        - contains:
+            code: 23404

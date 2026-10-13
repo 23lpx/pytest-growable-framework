@@ -27,16 +27,17 @@ def _params() -> list:
 
 @allure.feature("短链平台")
 class TestShortLink:
-    """商用短链平台的单接口用例 —— **框架的第二个被测系统**。
+    """商用短链平台的**单接口**用例 —— 扫 `data/api_shortlink/`。
 
-    和 `cases/test_api.py` 的区别就三处，都在下面写着：
-      · 扫的目录不同：`data/api_shortlink/`（不是 `data/api/`）
-      · 用的客户端不同：`shortlink_client`（base_url 指向短链平台）
-      · 挂的前置不同：`shortlink_login`（短链平台的登录，不是 flaskServer 的）
+    挂的三样：
+      · `shortlink_client`   —— base_url 指向短链平台（经网关）
+      · `shortlink_login`    —— 登录一次拿 token 写进变量池
+      · `shortlink_prepare`  —— 造**只读**的公共前置（专用分组 + 官方域名）
+      · `cleanup_test_data`  —— 跑完把本次造的数据删掉（快照差集），让用例集**可反复运行**
 
-    **为什么不是加一个 `if` 判断扫哪个目录**：两个被测系统是并列的，不是分支。
-    各自一个测试文件 = 各自一个入口 = 谁挂了不影响谁（flaskServer 没开的时候，
-    短链平台的用例照样能跑）。
+    ⚠️ **这里的用例必须互相独立**：不许有「A 跑完把状态改了、B 才成立」的依赖。
+       有前后关系的流程（删了再删、建了再查）一律走**场景**（`data/scenarios/`）。
+       公共前置 `${g1_id}` 是**只读**的，谁也不许删它、改它。
     """
 
     @pytest.mark.parametrize("case", _params())
@@ -47,6 +48,7 @@ class TestShortLink:
         context: Context,
         shortlink_login,
         shortlink_prepare,
+        cleanup_test_data,
     ) -> None:
         allure.dynamic.story(case.api_name)
         CaseRunner(shortlink_client, context).run(case)
