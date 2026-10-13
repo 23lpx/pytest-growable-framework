@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **不要直接替他把代码写完**。默认先讲思路、给方向；他写完后你批改（找 bug、指出不规范、讲清为什么）。除非他明确说「帮我写」「直接改」。
 - **全程用中文交流**。
 - 他的水平：能独立写 yaml 驱动 + fixture + 参数化，现在在搭自己的框架，已经能讨论分层、依赖方向、契约设计。
-- **`README.md` 是进度日志和避坑清单**，改动前后读一遍；每完成一个阶段，进度表、目录表要同步更新。
+- **`README.md` 是给外人看的门面**（本仓库**公开**）—— 只写**读者需要的事实**：项目是什么、怎么装怎么跑、目录与分层、用例怎么写、CI 怎么配。**不写第一人称的复盘 / 教训 / 进度流水账**，措辞用陈述句（不要"我""这一轮""值得记""踩过"）。
+- **本文件（CLAUDE.md）承接开发笔记**：踩坑记录、进度日志、决策复盘、待办 —— 都写这儿（见文末「开发笔记」节），别往 README 塞。每完成一个阶段，README 里**与事实相关**的部分（结构 / 命令 / 配置描述）要跟着更新，但**只写事实，不写心路**。
 - **`docs/代码规范.md` 是写代码的硬约束**，动 `src/pytest_framework/` 前先看。
 - **`docs/架构审查.md` 是分层基线和依赖判据** —— 加新模块 / 想抽接口前先对照它（尤其「有意的逆流，别动」那节，别把刻意的耦合当成 bug 修掉）。
 
@@ -23,7 +24,7 @@ Python 3.12，venv 在 `.venv/`。**必须用 `.venv` 里的解释器跑，禁�
 ./.venv/Scripts/python.exe -m pytest tests/ --junitxml=reports/junit.xml   # 出 junit 结果（CI 里就喂给通知脚本）
 ./.venv/Scripts/python.exe scripts/notify.py reports/junit.xml        # 本地验通知：不配环境变量就只打印、不发
 ./.venv/Scripts/python.exe -m pytest --collect-only -q                # 只收集不执行（用例数不对时第一件事）
-./.venv/Scripts/python.exe -m pytest -k 商品详情                        # 按名字筛（用例 id = 接口名:用例名）
+./.venv/Scripts/python.exe -m pytest -k 分组                           # 按名字筛（用例 id = 接口名:用例名）
 ./.venv/Scripts/python.exe -m pytest -m smoke                          # 按标记筛
 ./.venv/Scripts/python.exe -m pytest --reruns 2 --reruns-delay 1       # 失败重跑
 ./.venv/Scripts/python.exe -m pytest -n 2                              # 分布式（用例必须互不依赖）
@@ -250,3 +251,107 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 - **日志看不见了** → 三条路查：① logger 不能设 `propagate = False`（会切断 pytest 挂 root 的日志捕获）；② 默认不加 `-s`，日志只在用例失败时以 `Captured log` 形式出现，要看实时就加 `-s`；③ **`LogConfig.LOGGER_NAME` 必须和包名一致** —— 各模块 `getLogger(__name__)` 得到 `pytest_framework.xxx`，冒泡到 `pytest_framework` 就停，名字写错 handler 就形同虚设，日志**静悄悄全丢**（改包名时最容易忘，目录重构真断过一次）
 - 控制台输出挤成一团 → 检查 `addopts` 里有没有 `-s`（有的话日志会糊在 pytest 那行未结束的用例 id 后面）
 - 场景失败看不出断在第几步 → 报错上下文里有 `步骤=N/M` + 接口名（`ScenarioRunner` 补的）；加 `-s` 还能看到每步的 `--- 步骤 N/M: xxx ---` 日志
+
+---
+
+# 开发笔记
+
+> ⚠️ **这一节是给协作者 / 工具看的**（第一人称、复盘、时间线都在这儿），**不要搬进 `README.md`** —— README 只写事实，面向公开读者。
+> 内容原本长在 README 里，2026-10-13 挪过来。
+
+## 进度日志
+
+**课程**：1-9 ✅（requests / cookie / 封装 / yaml 用例 / 配置读取，旧仓库阶段）；10-18 ✅（pytest 基础 → 参数化 → yaml 驱动 → log 封装，10-07 ~ 10-08）；19-24 🔄（框架开发项目实战 —— 即本仓库自研框架的起点）；25-46 ⬜。
+
+**自研框架**（19 集之后的自主推进）：
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| 1 | 最小闭环：Reader → Model → Runner → Client | ✅ |
+| 2 | 多 case 调度权还给 pytest（一条 case = 一个 pytest 节点） | ✅ |
+| 3 | Runner 瘦身 + 抽 RequestHandler / ValidationHandler | ✅ |
+| 4 | 代码规范（阿里手册适配 Python）+ 异常体系 | ✅ |
+| 5 | 目录语义梳理（constants / contracts / infra / exception） | ✅ |
+| 6 | 依赖注入：`HttpClient` 由 session 级 fixture 注入，修掉 session 泄漏 | ✅ |
+| 7 | 接口关联：`context/` 变量池 + `${}` 占位符 + `extract_handler`；日志增强（分段 / 脱敏 / 带栈） | ✅ |
+| 8 | 参数位置自适应：`RequestHandler` 按 method + Content-Type 翻译成 params / json / data | ✅ |
+| 9 | 单接口铺开：8 个接口 28 条用例（用户组 5 + 电商组 3） | ✅ |
+| 10 | 业务场景：`ScenarioModel` + `ScenarioRunner`，电商下单全链路跑通 | ✅ |
+| 11 | 数据驱动：两种 `discover()`（单接口展平 / 场景不展平），加文件 = 加用例 | ✅ |
+| 12 | 配置收敛：`adapters/config.py` + `config/config.yaml`；`Context` 加父级 | ✅ |
+| 13 | allure 报告：场景 → 可视化嵌套 step；`environment.properties` 从配置生成 | ✅ |
+| 14 | 目录重构：src-layout + 按架构层分目录；`testcase/` → `cases/` | ✅ |
+| 15 | 查库校验：`ports.QueryExecutor`（只读）+ `DbChecker` + pymysql 底座 | ✅ |
+| 16 | CI 自动化：GitHub Actions 跑框架单测 + `scripts/notify.py` 发钉钉 / 邮件 | ✅ |
+| 17 | 第二个被测系统：短链平台（Java / Spring Cloud），225 条用例（166 绿 / 59 xfail） | ✅ |
+| 18 | 让用例可反复跑：快照差集清理 + 公共前置只读 + 流程进场景 + 摘过时 xfail（连跑两遍 187 绿 / 32 xfail / 0 红） | ✅ |
+| 19 | 接口用例进 Jenkins：Gitee 源码 + `python:3.12` 容器 + JUnit 报告 + 钉钉通知（构建 SUCCESS，89 秒） | ✅ |
+| 20 | 敏感信息移出仓库：`config/config.yaml` 不入库 + `filter-repo` 洗历史 + 强推（详见坑 ⑱） | ✅ |
+
+## 踩过的坑
+
+**① 中文路径会让 xdist 直接崩** —— `execnet ... EOFError`。项目必须放**纯 ASCII 路径**。
+
+**② venv 不能随便搬** —— 绝对路径写死在 `pyvenv.cfg` / `activate` / `pip.exe` 里。搬家后要么重建，要么永远用 `python -m pip`。
+
+**③ PyCharm 跑得通 ≠ 命令行跑得通** —— IDE 会把项目根当 Sources Root 加进 `sys.path`，命令行不会。报 `ModuleNotFoundError` 先想这个。
+
+**④ 控制台 print 中文是乱码，但断言是好的** —— Windows 管道 GBK 的问题。看干净输出：`PYTHONIOENCODING=utf-8`。
+
+**⑤ 写文件别用裸相对路径** —— `open('logs/x')` 跟着 **cwd** 走，换目录跑就写错地方。统一用 `infrastructure/path.py` 的 `_project_root()`。
+
+**⑥ `Path('D:/proj') / '/data/x'` 会顶掉项目根** —— 前导斜杠会让 pathlib 当成绝对路径，结果是 `D:\data\x` 而不是 `D:\proj\data\x`。写 `file_path` 前先 `lstrip("/\\")`。
+
+**⑦ 循环导入** —— 早期模型层和适配层互相 import 过一次，直接 `ImportError: partially initialized module`。单向依赖 + 必要时局部 import。
+
+**⑧ pytest 会递归收 `testpaths` 下的目录** —— 早年的 `cases/test_/` 备份目录就被收进来过，里面 import 断了导致整个 `collection error`、**一条都不跑**。它现在归档到 `archive/`（`testpaths = cases` 收不到），`pytest.ini` 里那个 `test_` 继续留着当防御。
+
+**⑨ `norecursedirs` 写一个值会把默认值整个顶掉** —— 只写 `test_`，pytest 默认的 `.venv` / `.*` / `*.egg` 就全失效了，`pytest .` 会把三方库自带的测试也收进来。要写就得把默认值补回来：`test_ *.egg .* venv build dist __pycache__`。
+
+**⑩ 跨用例关联的用例集不能开 `-n`** —— 变量池（`Context`）是**进程内**的，xdist 每个 worker 各一份，A 提取的 token B 看不见；而且用例还会被重新分配到不同 worker，"谁先跑"都不保证。这是「用例间有依赖」和「分布式」的固有冲突，换任何变量池实现都解决不了。
+
+**⑪ `contains` 是精确等值匹配，不是子串匹配** —— 断言值要写**完整消息**。（课程项目的 `contains` 是子串匹配，两者语义不同。）
+
+**⑫ `logger.propagate = False` 会让 pytest 看不见日志** —— pytest 的日志捕获（失败时那段 `Captured log`）挂在 **root logger** 上。一旦 `propagate=False` 断了冒泡，用例失败时报告里**一条日志都没有**，控制台又被 stderr 捕获吞掉，等于瞎了。**别设它。**
+
+**⑬ logger 级 Filter 管不到冒泡上来的日志** —— `logger.addFilter()` 只在 `Logger.handle()` 里对**直接记到该 logger** 的消息执行。框架里日志全是 `logging.getLogger(__name__)`（`pytest_framework.xxx`），挂在 `"pytest_framework"` 上的 filter 根本轮不到 —— 而且它**静默失效**，不报错。要打码就挂 record 工厂（`logging.setLogRecordFactory`），从源头下手。
+
+**⑭ `autouse` fixture 的依赖写在签名里 = 强制求值** —— fixture 的参数在**函数体之前**求值，`autouse` 又作用于整个会话，所以「签名里有 `config`」等于**每次跑 pytest 都加载配置** —— 函数体里那句 `if not 条件: return` 拦不住它。实测后果：配置文件一删，`pytest tests/` 的框架单测**全 ERROR**。要真惰性就挪进函数体：`cfg = request.getfixturevalue("config")`。（`conftest.py` 的 `_allure_environment` 踩过这个。）
+
+**⑮ 单测别读生产配置** —— 断言一旦绑在真实值上，「改一下 `config/config.yaml`」就会把单测带崩，「框架单测零依赖」变成空话。单测要配置文件就用自己的（`tests/data/config.yaml`）。
+
+**⑯ `LOGGER_NAME` 必须和包名一致，否则日志静默全丢** —— 各模块用 `logging.getLogger(__name__)`，名字是 `pytest_framework.xxx`，冒泡到 `pytest_framework` 就停。目录重构把包名从 `framework/` 改成 `src/pytest_framework/` 时，`LogConfig.LOGGER_NAME` 没跟着改，handler 挂在一个**永远收不到消息**的 logger 上 —— 文件日志、控制台日志**一起没了，不报错也不告警**，`logs/app.log` 停在重构前那一刻。**教训：日志这种东西，改完要真跑一次确认"它确实写进去了"，光看代码看不出来。**
+
+**⑰ 一次 `json.dumps` 能把整条脱敏废掉** —— 脱敏有两条路（按字段名 / 按值特征），**两条都要求"看到结构化数据"**。而 `http.py` 的 `_brief_body` 为了日志好看，把响应 `json.dumps` 成了字符串 —— 一序列化，结构就没了，两条路全断。短链平台正好把 token 装在 `data` 字段里（key 不叫 `token`），于是**登录凭证明文落盘**。修法：**先脱敏、再序列化**（`json.dumps(mask(body), ...)`）。
+> **教训**：**"让日志好看"和"让日志安全"会互相拆台** —— 这两件事在代码里离得很远（一个在 `http.py` 的格式化，一个在 `logging/masking.py`），不真跑起来看不出来。改了日志的**呈现方式**，就要重验一遍**脱敏还灵不灵**。
+
+**⑱ 敏感信息进了公开仓库，"删掉"也晚** —— `config/config.yaml` 带着**测试账号 + 库密码**，连同 README 里的**网关 IP、Jenkins 工具机 IP**，一起提交进了**公开**仓库（GitHub + Gitee）。那份文件当时还特意注释着"故意提交进 git：clone 下来配好就能跑比较重要" —— 等于把"方便"排在了"安全"前面。发现后只能 `filter-repo` 洗历史 + 强推，**而且旧值仍留在 GitHub 的旧 commit 里（按 SHA 至今取得到）** —— 真算完还得**轮换凭据**。
+> **教训**：判断该不该入库的口径只有一个 —— 「**换个环境还成立吗**」。账号密码、服务器地址不成立，就该归 `.gitignore` + `config.example.yaml` + 环境变量 / CI secrets，**代码、用例、文档、注释、commit message 里都不写**。
+>
+> **⑲ 顺带摸出来的**：`config/config.yaml` 进了 `.gitignore` 之后，`git checkout` / `git merge` **会把它当可覆盖对象直接清掉**（换分支时真丢过一次，值只在本地就没了）。真值别只存这一个文件，放密码管理器 / 环境变量更稳。
+
+## 待办与复盘
+
+**这一轮（18）做完的**：数据清理（`cleanup_test_data` 快照差集 + `scripts/clean_testdata.py` 兜底）；单接口独立（公共前置 `${g1_id}` 改**只读**，会删改它的 6 条移进场景）；场景化（2 条分组场景 + 1 个短链逃生舱）；摘掉 22 条过时 xfail、删 4 条重复的重名语义。
+
+**"碰巧过"的用例**（都靠脏数据撑着，清一次库就全挂）：
+
+| 用例 | 假象 | 真相 |
+|---|---|---|
+| `创建分组：并发同时建同名（竞态）` | 绿 | 靠账号里**残留的 `race`**；清干净后建 race 得 `0` —— 判据本身就不成立（串行跑不出竞态）→ **删** |
+| `更新分组：改成另一个已有分组的名字` | 绿 | 靠 `g1` **被别人删了**；实测更新接口**不查重**（返回 `0`）→ **按实测收进场景** |
+| `建链：expired 格式非法` | 红（挂错理由） | 实测服务端**不校验** expired 格式、照收 → **按实测改期望** |
+
+> **教训**：早先总结过「测出来的差异，先排除是不是我数据不对」—— 这次是它的**反面**：**"看起来绿"也可能是脏数据撑的**。清一遍库再跑，才看得出哪些用例是真独立的。
+
+**早先的一次误判**：把「**数据不对**导致的通用错误码」当成了「**契约模糊点**」—— 那时 `groupId` 还是没替换的占位符，请求在参数校验层就被拒了，返回 110003；**前置补齐后服务端进到业务逻辑，返回的是文档承诺的 260401**。**测出来的差异，先排除"是不是我数据不对"，再记被测系统的账。**
+
+**框架侧补的 4 项能力**（都是"测第二个系统"撞出来的真实缺口，不是为某张表打的补丁）：`path_params`（REST 路径参数）、用例级 `headers`（同接口不同鉴权）、`xfail` 字段（已知缺陷挂标记，`strict`）、脱敏修复（见坑 ⑰）。
+
+**等外部条件的**（需求写在被测项目侧的 `docs/测试环境需求-给开发.md`）：
+
+- **第二测试账号** —— 卡 8 条越权用例（注册要短信验证码，自动化造不出来）
+- **流量额度** —— 免费包一天 3 条（建链用例连跑两遍都过，额度够；长期跑要盯）
+
+**框架侧还欠的**（框架缺口，不是用例问题）：跳转类断言（302 / Location，10 条 xfail）。
+
