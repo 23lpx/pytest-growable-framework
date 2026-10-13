@@ -43,6 +43,8 @@ Windows 控制台中文乱码时加 `PYTHONIOENCODING=utf-8`。
 - 推上去后 **GitHub Actions 跑框架单测**（`.github/workflows/ci.yml`）；**接口用例走 Jenkins**（工具机）—— 用例要连**内网**的测试环境，GHA 的 runner 够不着，Jenkins 和内网通。配置细节见 README「接口用例怎么进 Jenkins」。
 - ⚠️ **`git push` 会同时推 GitHub 和 Gitee**（`origin` 配了两个 push 地址）：GitHub 是主仓库，Gitee 是 **Jenkins 的拉取源** —— **只推 GitHub 的话，Jenkins 跑的还是旧代码**。想单独推某个远端要显式指定。
 - Claude Code 提的 commit，message 结尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
+- ⚠️ **敏感信息一律不入库**：服务器地址 / IP、账号密码、token / webhook 密钥，走 `config/config.yaml`（**不入库**，模板 `config/config.example.yaml`）或环境变量 / CI secrets —— **不许写进代码、用例数据、文档、注释、commit message**。判据还是那条「换个环境还成立吗」：账号密码不成立，就归本地 / secrets。
+- ⚠️ **本仓库是公开的（GitHub + Gitee），而且"事后删掉"很晚** —— 历史里的值仍能按旧 commit SHA 取到。2026-10-13 就踩过：`config/config.yaml` 带着测试账号、库密码和服务器地址进了公开仓库，得 `filter-repo` 洗历史 + 强推才收敛，GitHub 上的旧 SHA 至今仍可访问。
 
 ```bash
 git checkout develop                    # 日常都在 develop
@@ -136,7 +138,7 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
 | `data/api_shortlink/` | **单接口**数据 yaml（一个接口一个文件，`base_info` + `test_cases`）。**加文件 = 加用例** |
 | `archive/` | **归档区**：不再维护、pytest 也收不到（`testpaths = cases`）。现在装的是 flaskServer 那套。见 `archive/README.md` |
 | `data/scenarios/` | **业务场景** yaml（根节点是列表，N 个接口块按顺序）。**有先后关系的流程放这儿**（如分组生命周期、重名判重）；一个场景 = 一个 pytest 节点 |
-| `config/config.yaml` | **环境配置**（base_url / timeout / 账号）。换环境只改这份。真实项目该进 `.gitignore` |
+| `config/config.yaml` | **环境配置**（base_url / timeout / 账号）。**不入库**（在 `.gitignore` 里），模板见 `config/config.example.yaml`；真值也可走环境变量 `APP_*` |
 | `pyproject.toml` | 打包声明（src-layout 的包在 `src/` 下）+ 依赖清单 |
 | `tools/` | 本地工具（allure 命令行），**不进 git**。各人自己解压一份 |
 | `.github/workflows/ci.yml` | **CI**（push / PR / 手动触发）：跑**框架单测** + 存 allure 产物 + 发通知。用 `continue-on-error` + 最后判 `outcome`，保证**测试失败也照发通知**。**只跑 `tests/`** —— `cases/` 要外网的测试环境，runner 够不着 |
