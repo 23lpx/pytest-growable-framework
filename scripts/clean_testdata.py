@@ -14,6 +14,10 @@
 
 ⚠️ 正因为是「无差别清空」，它**只对专用测试账号安全** —— 账号里有别人的数据会一起删。
 
+⚠️ 它和 conftest 的清理**共用同一份底层实现**（`fixtures/shortlink.py` 的
+    `ShortlinkAdmin`）—— 列举和删除的动作只写一遍，这里只负责"删全部"这个策略。
+    （原先两边各写了一份 `_all_groups` / `_all_links`，是重复代码。）
+
 ⚠️ 依赖框架（`Config` / `HttpClient` / 登录用例），和 `notify.py` 那种"不 import 框架"
    的 CI 胶水不是一类：它的活儿就是操作被测系统，和框架的关注点一致。
    前提是包已可编辑安装（`pip install -e .`），否则 `python scripts/xxx.py` 找不到包。
@@ -22,38 +26,23 @@
     ./.venv/Scripts/python.exe scripts/clean_testdata.py
 """
 
-from pytest_framework.adapters.config import Config
-from pytest_framework.adapters.execute_case import ExecuteCase
-from pytest_framework.entities.context.context import Context
-from pytest_framework.entities.model.case_model import CaseModel
-from pytest_framework.infrastructure.http import HttpClient
-from pytest_framework.infrastructure.logging.logger import init_logger
-from pytest_framework.usecases.case_runner import CaseRunner
+import sys
+from pathlib import Path
+
+# `python scripts/xxx.py` 时 sys.path[0] 是 scripts/，项目根不在里面 ——
+# 手动补上，否则 import 不到 fixtures/（pytest_framework 那边靠 pip install -e . 解决）
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from fixtures.shortlink import ShortlinkAdmin  # noqa: E402
+from pytest_framework.adapters.config import Config  # noqa: E402
+from pytest_framework.adapters.execute_case import ExecuteCase  # noqa: E402
+from pytest_framework.entities.context.context import Context  # noqa: E402
+from pytest_framework.entities.model.case_model import CaseModel  # noqa: E402
+from pytest_framework.infrastructure.http import HttpClient  # noqa: E402
+from pytest_framework.infrastructure.logging.logger import init_logger  # noqa: E402
+from pytest_framework.usecases.case_runner import CaseRunner  # noqa: E402
 
 LOGIN_CASES = '/data/api_shortlink/login_post_account_login.yaml'
-
-GROUP_LIST = '/link-server/api/group/v1/list'
-GROUP_DEL = '/link-server/api/group/v1/del'
-LINK_PAGE = '/link-server/api/link/v1/page'
-LINK_DEL = '/link-server/api/link/v1/del'
-
-# 一页拉多少 —— 测试账号的数据量远小于这个数，一页足够
-PAGE_SIZE = 1000
-
-
-def _all_groups(client: HttpClient, headers: dict) -> set[str]:
-    """账号下所有分组的 id。"""
-    resp = client.request("GET", GROUP_LIST, headers=headers)
-    return {g["id"] for g in resp.json().get("data") or []}
-
-
-def _all_links(client: HttpClient, headers: dict) -> dict[str, str]:
-    """账号下所有短链的 {mappingId: code} —— 删链两个字段都要。"""
-    resp = client.request(
-        "POST", LINK_PAGE, json={"page": 1, "size": PAGE_SIZE}, headers=headers
-    )
-    data = resp.json().get("data") or {}
-    return {item["id"]: item["code"] for item in data.get("current_data") or []}
 
 
 def main() -> None:
@@ -68,28 +57,19 @@ def main() -> None:
         if not context.exists("token"):
             print("登录失败、拿不到 token —— 先确认被测服务开着，再跑一次。")
             return
-        headers = {"Content-Type": "application/json", "token": context.get("token")}
+
+        admin = ShortlinkAdmin(client, context.get("token"))
+        snapshot = admin.snapshot()
+        if snapshot is None:
+            print("拿不到账号数据（服务不可用 / 业务码异常）—— 先确认被测服务开着。")
+            return
+        groups, links = snapshot
 
         # 先删短链、再删分组 —— 反过来的话分组没了，短链的 groupId 就悬空
-        links = _all_links(client, headers)
-        deleted_links = 0
-        for mapping_id, code in links.items():
-            resp = client.request(
-                "POST", LINK_DEL,
-                json={"mappingId": mapping_id, "code": code}, headers=headers,
-            )
-            if resp.json().get("code") == 0:
-                deleted_links += 1
+        deleted_links = admin.delete_links(links)
         print(f"短链：账号下 {len(links)} 条，删除成功 {deleted_links} 条")
 
-        groups = _all_groups(client, headers)
-        deleted_groups = 0
-        for group_id in groups:
-            resp = client.request(
-                "DELETE", f"{GROUP_DEL}/{group_id}", headers=headers
-            )
-            if resp.json().get("code") == 0:
-                deleted_groups += 1
+        deleted_groups = admin.delete_groups(groups)
         print(f"分组：账号下 {len(groups)} 个，删除成功 {deleted_groups} 个")
 
         print("清理完成。")
