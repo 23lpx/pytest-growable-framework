@@ -11,6 +11,7 @@ base_info:
 
 test_cases:
   - case_name: "域名列表：查询可用域名"
+    smoke: true
     headers:
       token: "${token}"
     data:

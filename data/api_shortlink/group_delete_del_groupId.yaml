@@ -23,6 +23,7 @@ test_cases:
       - contains:
           code: 23404
   - case_name: "删除分组：不存在的 id"
+    smoke: true
     headers:
       token: "${token}"
     path_params:

@@ -20,6 +20,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "分页：正常查询"
+    smoke: true
     headers:
       token: "${token}"
     data:

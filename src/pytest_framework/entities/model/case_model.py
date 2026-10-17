@@ -31,6 +31,11 @@ class TestCase:
     # 消费方（cases/）据此挂 pytest 的 xfail —— 它红了不算失败，而哪天被修好，
     # pytest 会以 XPASS 提醒你把标记摘掉。不填就是正常用例。
     xfail: str = ""
+    # 冒烟标记：填 true 表示「核心路径，改完代码先跑这条」。
+    # 和 xfail 同一个套路 —— yaml 里的元信息，由消费方（cases/）翻译成 pytest 标记。
+    # ⚠️ 靠它的是 `-m smoke`，**不进冒烟集就别填** —— 冒烟集要能在两分钟内跑完，
+    #    塞多了它就退化成"全量跑"，失去"改完先跑一遍"的意义。
+    smoke: bool = False
 
 
 class CaseModel:
@@ -98,6 +103,7 @@ class CaseModel:
                     path_params=self._parse_path_params(case),
                     headers=self._parse_headers(case),
                     xfail=str(case.get('xfail', '') or ''),
+                    smoke=bool(case.get('smoke', False)),
                 ))
         except (KeyError, TypeError) as e:
             raise CaseParseError(f"用例结构不符合规范，字段缺失或类型不对: {e}") from e

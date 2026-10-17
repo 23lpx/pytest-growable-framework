@@ -5,9 +5,10 @@
 **特点**
 
 - **数据驱动** —— 单接口和场景都是 yaml，**加数据文件 = 加用例**，代码不用改
-- **单向分层** —— `entities → ports → usecases → adapters → infrastructure`，内层只认端口、不认实现
+- **单向分层** —— 由内到外 `entities → ports → usecases → adapters → infrastructure`，内层只认端口、不认实现
 - **两种消费方式，一个执行器** —— 单接口展平成 N 个 pytest 节点（保住 `-k` / 重跑粒度），场景收成 1 个节点（顺序由数据决定）
 - **可反复跑** —— 会话前后各记一份数据快照，跑完按差集自动清理；用例集能回归，不是一次性脚本
+- **冒烟 / 回归分层** —— `-m smoke` 只跑 7 条核心路径（登录 / 鉴权 / 分组 / 查询），几秒出结果；200+ 条全量留给回归。标记写在 YAML 里，和 `xfail` 同一套机制
 
 ---
 
@@ -35,8 +36,8 @@ cp config/config.example.yaml config/config.yaml                  # 填被测地
 src/pytest_framework/     框架本体（按架构层分目录）
 ├── entities/             最内：用例模型 / 变量池 / 契约 / 异常 / 常量（零第三方依赖）
 ├── ports/                端口：sender / query（内层定契约，外层实现）
-├── usecases/             编排：case_runner（单条）/ scenario_runner（场景）
-├── adapters/             适配：请求 / 校验 / 查库 / 提取 / 读 yaml / 配置
+├── usecases/             编排：case_runner（单条）/ scenario_runner（场景）/ 校验 / 提取
+├── adapters/             适配：请求 / 查库 / 读 yaml / 配置（跨边界的格式转换）
 └── infrastructure/       最外：http / logging（含脱敏）/ db / report(allure) / path
 
 cases/                    测试入口（加数据文件 = 加用例）
@@ -67,7 +68,7 @@ test_cases:
       - contains: { code: 0 }
 ```
 
-一条用例能写的字段：`data`（请求参数）、`validation`（响应断言）、`extract`（提取进变量池，供后续 `${}` 引用）、`db`（查库断言）、`path_params`、`headers`（用例级，覆盖接口级）、`xfail`（已知缺陷标记）。
+一条用例能写的字段：`data`（请求参数）、`validation`（响应断言）、`extract`（提取进变量池，供后续 `${}` 引用）、`db`（查库断言）、`path_params`、`headers`（用例级，覆盖接口级）、`xfail`（已知缺陷标记）、`smoke`（冒烟标记）。
 
 **场景** —— 根节点是 list，**顺序即执行顺序**；把几个接口块顺序排开，用 `extract` + `${}` 在步骤间传值。
 
@@ -84,7 +85,7 @@ test_cases:
 ./.venv/Scripts/python.exe -m pytest tests/             # 跑框架自身的单测（不依赖被测服务）
 ./.venv/Scripts/python.exe -m pytest --collect-only -q  # 只收集不执行
 ./.venv/Scripts/python.exe -m pytest -k 分组            # 按名字筛
-./.venv/Scripts/python.exe -m pytest -m smoke           # 按标记筛
+./.venv/Scripts/python.exe -m pytest -m smoke           # 冒烟集（7 条核心路径）
 ./.venv/Scripts/python.exe -m pytest -x                 # 第一个失败就停
 ```
 

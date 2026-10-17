@@ -25,7 +25,7 @@ Python 3.12，venv 在 `.venv/`。**必须用 `.venv` 里的解释器跑，禁�
 ./.venv/Scripts/python.exe scripts/notify.py reports/junit.xml        # 本地验通知：不配环境变量就只打印、不发
 ./.venv/Scripts/python.exe -m pytest --collect-only -q                # 只收集不执行（用例数不对时第一件事）
 ./.venv/Scripts/python.exe -m pytest -k 分组                           # 按名字筛（用例 id = 接口名:用例名）
-./.venv/Scripts/python.exe -m pytest -m smoke                          # 按标记筛
+./.venv/Scripts/python.exe -m pytest -m smoke                          # 冒烟集（改完代码先跑它 —— 7 条，几秒钟）
 ./.venv/Scripts/python.exe -m pytest --reruns 2 --reruns-delay 1       # 失败重跑
 ./.venv/Scripts/python.exe -m pytest -n 2                              # 分布式（用例必须互不依赖）
 ./.venv/Scripts/python.exe -m pip install -e .                         # 可编辑安装（可选，见下「src-layout」）
@@ -96,10 +96,10 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
          │  ── 逐步调用 ──┐
          └────────────────┴──▶  usecases/CaseRunner.run(case)   编排，五步  ← 两条路径在此汇合
                                   ├── entities/context/replacer.resolve_case  解析 ${...} → 产出**副本**（绝不改原 case）
-                                  ├── adapters/RequestHandler   依赖 ports/Sender ← infrastructure/HttpClient 实现
-                                  ├── adapters/ValidationHandler  校验**响应**（fail-fast：不过就不写变量池）
-                                  ├── adapters/DbChecker         校验**库**（yaml 的 db 段；没写就跳过）
-                                  └── adapters/ExtractHandler     提取 → entities/Context（供后续用例引用）
+                                  ├── adapters/RequestHandler     依赖 ports/Sender ← infrastructure/HttpClient 实现
+                                  ├── usecases/ValidationHandler  校验**响应**（fail-fast：不过就不写变量池）
+                                  ├── adapters/DbChecker          校验**库**（yaml 的 db 段；没写就跳过）
+                                  └── usecases/ExtractHandler     提取 → entities/Context（供后续用例引用）
 ```
 
 | 目录 / 文件 | 职责 |
@@ -116,15 +116,15 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
 | **ports/**（端口：内层定契约、外层实现） | |
 | `ports/sender.py` | `Sender` —— 「能把一个请求发出去」。`infrastructure/http.py` 实现它，`conftest` 注入 |
 | `ports/query.py` | `QueryExecutor` —— 「能把一条 SQL 打出去、拿回行」。**只读**（只开 `query`、不开写）。`infrastructure/db.py` 实现它，`conftest` 注入 |
-| **usecases/**（编排：一次测试怎么跑） | |
+| **usecases/**（编排：一次测试怎么跑 + 应用规则） | |
 | `usecases/case_runner.py` | 只做编排：解析占位符 → 发送 → 校验响应 → 校验库 → 提取。**不循环、不管生命周期、不认识"列表/场景"** |
 | `usecases/scenario_runner.py` | 场景编排：按 yaml 顺序逐步调 `CaseRunner`；步骤日志；失败补「第 N/M 步」上下文。**不重写四步** |
-| **adapters/**（适配：翻译） | |
+| `usecases/validation.py` | `ValidationHandler.validate(case, resp)` —— 校验**响应**，抛 `ValidationError`。**应用规则**（比对两个内存 dict，不跨边界） |
+| `usecases/extract.py` | `ExtractHandler.extract(case, resp, ctx)` —— jsonpath 提取，写进变量池。同上，**不跨边界** |
+| **adapters/**（适配：**跨边界的格式转换**） | |
 | `adapters/execute_case.py` | 适配。`ExecuteCase` 带接口级+用例级信息，`from_model()` / `discover()`。**不 import pytest** |
 | `adapters/request.py` | `RequestHandler.send(case)`。依赖 `ports.Sender`，**不 import `HttpClient` / `requests`** |
-| `adapters/validation.py` | `ValidationHandler.validate(case, resp)` —— 校验**响应**，抛 `ValidationError` |
 | `adapters/db_checker.py` | `DbChecker.check(list)` —— 校验**库**：声明式期望 → SQL → 比对。**yaml 里不写 SQL**，SQL 由它生成 |
-| `adapters/extract.py` | `ExtractHandler.extract(case, resp, ctx)` —— jsonpath 提取，写进变量池 |
 | `adapters/reader.py` | 读 yaml → dict。抛 `YamlReadError` |
 | `adapters/config.py` | 环境配置。`Config.load()` 读 yaml + 叠环境变量覆盖；**内部是 `Context`**，可直接当变量池的父级 |
 | **infrastructure/**（最外，具体库都在这） | |
@@ -158,6 +158,7 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
 | `path_params` | 填 url 里的 `{占位符}` | 值内部仍可用 `${}`；**填完还有残留占位符会 fail-fast** |
 | `headers` | **用例级**请求头 | **覆盖** `base_info.headers` 的同名项 —— 同接口鉴权不同时用（正常/越权/未登录） |
 | `xfail` | 已知缺陷标记 | 填了原因 → 消费方（`cases/`）挂 `pytest.mark.xfail(strict)`；修好后 XPASS 报警 |
+| `smoke` | 冒烟标记 | 填 `true` → 消费方挂 `pytest.mark.smoke`。**只标「服务活着没」那几条**，别把正常路径全标上 —— 冒烟集一胖就退化成全量跑，失去「改完先跑一遍」的意义 |
 
 **依赖倒置：内层只认端口，不认实现**：`adapters` / `usecases` 依赖的是 `ports.Sender`（端口）+ `entities.contracts.ResponseLike`（响应契约），**不 import `infrastructure.HttpClient`、也不 import `requests`** —— 全仓只有 `conftest` 知道 `HttpClient` 存在。同理 `adapters` 不 import pytest。判据：**内层模块的 import 里有没有出现具体库或外层类**。
 

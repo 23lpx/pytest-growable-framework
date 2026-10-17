@@ -12,6 +12,7 @@ base_info:
 
 test_cases:
   - case_name: "分组详情：查自己的分组"
+    smoke: true
     headers:
       token: "${token}"
     path_params:

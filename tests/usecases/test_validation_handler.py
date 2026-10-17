@@ -3,7 +3,7 @@ from typing import Any, Callable
 import pytest
 
 from pytest_framework.entities.exception.errors import ValidationError
-from pytest_framework.adapters.validation import ValidationHandler
+from pytest_framework.usecases.validation import ValidationHandler
 
 
 class FakeCase:

@@ -39,6 +39,8 @@ class ExecuteCase:
     path_params: dict = field(default_factory=dict)
     # 已知缺陷原因（非空 = 消费方该挂 xfail）。见 TestCase.xfail
     xfail: str = ""
+    # 冒烟标记（True = 消费方该挂 smoke）。见 TestCase.smoke
+    smoke: bool = False
 
     @classmethod
     def from_model(cls, case_model: CaseModel) -> "list[ExecuteCase]":
@@ -57,6 +59,7 @@ class ExecuteCase:
                 db_validations=c.db_validations,
                 path_params=c.path_params,
                 xfail=c.xfail,
+                smoke=c.smoke,
             )
             for c in case_model.cases
         ]

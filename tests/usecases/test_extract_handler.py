@@ -4,7 +4,7 @@ import pytest
 
 from pytest_framework.entities.context.context import Context
 from pytest_framework.entities.exception.errors import ExtractError
-from pytest_framework.adapters.extract import ExtractHandler
+from pytest_framework.usecases.extract import ExtractHandler
 
 
 class FakeCase:

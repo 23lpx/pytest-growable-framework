@@ -1,15 +1,15 @@
 import logging
 
 from pytest_framework.adapters.db_checker import DbChecker
-from pytest_framework.adapters.extract import ExtractHandler
 from pytest_framework.adapters.request import RequestHandler
-from pytest_framework.adapters.validation import ValidationHandler
 from pytest_framework.entities.context.context import Context
 from pytest_framework.entities.context.replacer import ResolvedCase, resolve_case
 from pytest_framework.entities.contracts import CaseLike
 from pytest_framework.entities.exception.base import FrameworkError
 from pytest_framework.entities.exception.errors import DatabaseError
 from pytest_framework.ports.sender import Sender
+from pytest_framework.usecases.extract import ExtractHandler
+from pytest_framework.usecases.validation import ValidationHandler
 
 logger = logging.getLogger(__name__)
 

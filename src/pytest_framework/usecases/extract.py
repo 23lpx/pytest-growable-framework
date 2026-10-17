@@ -1,4 +1,10 @@
-"""提取这一步：把响应里后续要用的值（token / user_id …）捞出来存进变量池。"""
+"""提取这一步：把响应里后续要用的值（token / user_id …）捞出来存进变量池。
+
+**为什么在 `usecases/` 而不是 `adapters/`**：同 `validation.py` —— 它处理的都是
+内存里的 dict，不跨任何边界。`jsonpath` 是**算法**，不是外部系统。
+
+（原先它在 `adapters/` 下，会让 `usecases` 反向依赖 `adapters` —— 2026-10-16 挪过来。）
+"""
 
 from typing import Any
 

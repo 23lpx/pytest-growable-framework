@@ -1,3 +1,13 @@
+"""校验这一步：把响应的键值对和 yaml 里的期望逐条比对。
+
+**为什么在 `usecases/` 而不是 `adapters/`**：它不跨任何边界 —— 比对的是两个内存里
+的 dict，既不认第三方库、也不认外部系统。adapter 的活儿是「跨边界的格式转换」
+（读文件、生成传输参数位、生成 SQL），而「怎么比对算通过」是**应用规则**，
+归 use case 层。
+
+（原先它在 `adapters/` 下，会让 `usecases` 反向依赖 `adapters` —— 2026-10-16 挪过来。）
+"""
+
 from typing import Any, Callable
 
 from pytest_framework.entities.constants.validation import ValidationOp
@@ -64,7 +74,10 @@ class ValidationHandler:
         if not isinstance(expected, dict):
             raise ValidationError(f"contains 的规则值必须是键值对: {expected!r}")
 
-        # 收集没对上的，比单看 True/False 多给出「差在哪」
-        unmatched = {k: v for k, v in expected.items() if actual.get(k) != v}
+        # 把「没对上的键」连同「实际是什么」一起收出来 —— 只甩一整坨 actual，
+        # 响应体一大就找不出是哪个字段对不上（这个 dict 原本算了却没往消息里放）
+        unmatched = {
+            k: (v, actual.get(k)) for k, v in expected.items() if actual.get(k) != v
+        }
         if unmatched:
-            raise ValidationError(f"期望响应包含 {expected}，实际 {actual}")
+            raise ValidationError(f"响应字段没对上（期望 → 实际）: {unmatched}")

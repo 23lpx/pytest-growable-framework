@@ -17,6 +17,7 @@ base_info:
 
 test_cases:
   - case_name: "手机号校验：合法已注册（有效等价类）"
+    smoke: true
     data:
       phone: "${shortlink.phone}"
       pwd: "${shortlink.pwd}"

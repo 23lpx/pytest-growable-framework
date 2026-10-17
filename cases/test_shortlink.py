@@ -8,7 +8,10 @@ from pytest_framework.usecases.case_runner import CaseRunner
 
 
 def _params() -> list:
-    """把用例转成 pytest 参数；声明了 xfail 的挂上标记。
+    """把用例转成 pytest 参数；yaml 里的元信息（xfail / smoke）在这一步翻成标记。
+
+    为什么要「翻译」：yaml 驱动的用例**没有 Python 函数可以挂装饰器** ——
+    标记写不进 yaml，只能在这层把 yaml 字段映射成 `pytest.mark.*`。
 
     `strict=True` 是有意的：这条是「已知缺陷、判据正确」，所以**红了算预期**；
     可一旦哪天被测系统把它修好了，用例会变绿 → pytest 报 **XPASS 失败** →
@@ -16,9 +19,11 @@ def _params() -> list:
     """
     params = []
     for case in ExecuteCase.discover("data/api_shortlink"):
-        marks = (
-            [pytest.mark.xfail(reason=case.xfail, strict=True)] if case.xfail else []
-        )
+        marks = []
+        if case.xfail:
+            marks.append(pytest.mark.xfail(reason=case.xfail, strict=True))
+        if case.smoke:
+            marks.append(pytest.mark.smoke)
         params.append(
             pytest.param(case, marks=marks, id=f"{case.api_name}:{case.case_name}")
         )

@@ -11,6 +11,7 @@ base_info:
 
 test_cases:
   - case_name: "分组列表：有分组时查询"
+    smoke: true
     headers:
       token: "${token}"
     data:

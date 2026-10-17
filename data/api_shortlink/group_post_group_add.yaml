@@ -19,6 +19,7 @@ base_info:
 
 test_cases:
   - case_name: "创建分组：正常创建（基准）"
+    smoke: true
     headers:
       token: "${token}"
     data:
