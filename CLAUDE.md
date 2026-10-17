@@ -399,7 +399,7 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 |---|---|
 | 源码管理 | Git → Gitee 仓库，分支 `*/develop` |
 | 构建触发器 | 手动（可加定时） |
-| 构建环境 | 绑定凭据 → 环境变量 `DINGTALK_WEBHOOK` / `DINGTALK_SECRET` / `APP_SHORTLINK__PWD` / `APP_SHORTLINK__PHONE` |
+| 构建环境 | 绑定凭据 → 环境变量 `DINGTALK_WEBHOOK` / `DINGTALK_SECRET` / `APP_SHORTLINK__BASE_URL` / `APP_SHORTLINK__PHONE` / `APP_SHORTLINK__PWD` |
 | Build step | 见下 |
 | 构建后操作 | Publish JUnit test result report → `reports/junit.xml` |
 
@@ -407,7 +407,8 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 docker run --rm \
   -v "$WORKSPACE":/app \
   -v /data/pytest_venv:/venv \
-  -e DINGTALK_WEBHOOK -e DINGTALK_SECRET -e APP_SHORTLINK__PWD -e APP_SHORTLINK__PHONE \
+  -e DINGTALK_WEBHOOK -e DINGTALK_SECRET \
+  -e APP_SHORTLINK__BASE_URL -e APP_SHORTLINK__PHONE -e APP_SHORTLINK__PWD \
   -w /app \
   python:3.12-slim \
   bash -c '
