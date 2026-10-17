@@ -159,6 +159,7 @@ data/scenarios/*.yaml      ← 场景（list：N 个接口块，**顺序即执�
 | `headers` | **用例级**请求头 | **覆盖** `base_info.headers` 的同名项 —— 同接口鉴权不同时用（正常/越权/未登录） |
 | `xfail` | 已知缺陷标记 | 填了原因 → 消费方（`cases/`）挂 `pytest.mark.xfail(strict)`；修好后 XPASS 报警 |
 | `smoke` | 冒烟标记 | 填 `true` → 消费方挂 `pytest.mark.smoke`。**只标「服务活着没」那几条**，别把正常路径全标上 —— 冒烟集一胖就退化成全量跑，失去「改完先跑一遍」的意义 |
+| `skip` | 跳过标记 | 填了原因 → 消费方挂 `pytest.mark.skip`，报告里显示 **skipped**（既不算过也不算败）。用于「前置条件不具备、跑都别跑」—— 如 stats 那几条要真短链才能验数据的用例。**和 xfail 的区别**：xfail 是「判据对、结果红」，skip 是「压根跑不了」 |
 
 **依赖倒置：内层只认端口，不认实现**：`adapters` / `usecases` 依赖的是 `ports.Sender`（端口）+ `entities.contracts.ResponseLike`（响应契约），**不 import `infrastructure.HttpClient`、也不 import `requests`** —— 全仓只有 `conftest` 知道 `HttpClient` 存在。同理 `adapters` 不 import pytest。判据：**内层模块的 import 里有没有出现具体库或外层类**。
 
@@ -288,6 +289,8 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 | 18 | 让用例可反复跑：快照差集清理 + 公共前置只读 + 流程进场景 + 摘过时 xfail（连跑两遍 187 绿 / 32 xfail / 0 红） | ✅ |
 | 19 | 接口用例进 Jenkins：Gitee 源码 + `python:3.12` 容器 + JUnit 报告 + 钉钉通知（构建 SUCCESS，89 秒） | ✅ |
 | 20 | 敏感信息移出仓库：`config/config.yaml` 不入库 + `filter-repo` 洗历史 + 强推（详见坑 ⑱） | ✅ |
+| 21 | 分层归位 + 冒烟/回归：`validation` / `extract` 从 adapters 挪进 usecases（它们不跨边界）；新增 `smoke` / `skip` 字段 —— YAML 元信息 → pytest 标记（冒烟 7 条 / 5 秒；统计域 7 条假绿改 skip） | ✅ |
+| 22 | CI 修复：GHA 红 5 天（`--alluredir` 触发读配置，而 CI 上没有 config.yaml，详见坑 ⑳）；Jenkins 187 全 ERROR（`-e` 没传 + 凭据没绑 + 配置加载过早失败）；`Config` 改为可缺省、回落到 example 模板 | ✅ |
 
 ## 踩过的坑
 
@@ -432,8 +435,8 @@ docker run --rm \
 
 ```bash
 git remote -v
-#   origin  git@github.com:23lpx/pytest_practice.git                   (fetch)
-#   origin  git@github.com:23lpx/pytest_practice.git                   (push)
+#   origin  git@github.com:23lpx/pytest-growable-framework.git         (fetch)
+#   origin  git@github.com:23lpx/pytest-growable-framework.git         (push)
 #   origin  git@gitee.com:li-peng-xiang-2315915034/pytest_practice.git (push)
 ```
 

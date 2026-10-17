@@ -95,6 +95,7 @@ test_cases:
       - contains:
           code: 250004
   - case_name: "数据正确性：趋势曲线与跳转分布一致"
+    skip: "待补：需要一条真短链的 code —— 当前 data.code 是字面量 <code>，查询返回空数据"
     headers:
       token: "${token}"
     data:

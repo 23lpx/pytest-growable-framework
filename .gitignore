@@ -28,3 +28,6 @@ tools/
 
 # ---- 环境配置（含测试账号、库密码，不进库；模板见 config/config.example.yaml）----
 config/config.yaml
+
+# ---- 个人 / 学习材料（不进公开仓库）----
+docs/课程项目借鉴.md

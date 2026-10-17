@@ -24,6 +24,8 @@ def _params() -> list:
             marks.append(pytest.mark.xfail(reason=case.xfail, strict=True))
         if case.smoke:
             marks.append(pytest.mark.smoke)
+        if case.skip:
+            marks.append(pytest.mark.skip(reason=case.skip))
         params.append(
             pytest.param(case, marks=marks, id=f"{case.api_name}:{case.case_name}")
         )

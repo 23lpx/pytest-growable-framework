@@ -11,6 +11,7 @@ base_info:
 
 test_cases:
   - case_name: "设备分布：正常查询"
+    skip: "待补：需要一条真短链的 code —— 当前 data.code 是字面量 <code>，查询返回空数据"
     headers:
       token: "${token}"
     data:

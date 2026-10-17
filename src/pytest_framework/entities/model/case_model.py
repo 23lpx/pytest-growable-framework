@@ -36,6 +36,12 @@ class TestCase:
     # ⚠️ 靠它的是 `-m smoke`，**不进冒烟集就别填** —— 冒烟集要能在两分钟内跑完，
     #    塞多了它就退化成"全量跑"，失去"改完先跑一遍"的意义。
     smoke: bool = False
+    # 跳过标记：填了原因就表示「这条现在跑不了，但用例不删」。
+    # 消费方（cases/）据此挂 pytest.mark.skip —— 报告里显示 skipped，
+    # **既不算过也不算败**。和 xfail 的区别：xfail 是「判据对、结果红」，
+    # skip 是「前置条件不具备，跑都别跑」。
+    # 典型场景：用例断言的是「有数据」，但需要一条真短链才能造出来。
+    skip: str = ""
 
 
 class CaseModel:
@@ -104,6 +110,7 @@ class CaseModel:
                     headers=self._parse_headers(case),
                     xfail=str(case.get('xfail', '') or ''),
                     smoke=bool(case.get('smoke', False)),
+                    skip=str(case.get('skip', '') or ''),
                 ))
         except (KeyError, TypeError) as e:
             raise CaseParseError(f"用例结构不符合规范，字段缺失或类型不对: {e}") from e

@@ -11,6 +11,7 @@ base_info:
 
 test_cases:
   - case_name: "访问记录：正常分页查询"
+    skip: "待补：需要一条真短链的 code —— 当前 data.code 是字面量 <code>，查询返回空数据"
     headers:
       token: "${token}"
     data:
@@ -159,6 +160,7 @@ test_cases:
       - contains:
           code: 0
   - case_name: "数据正确性：跳转 N 次后访问记录条数"
+    skip: "待补：需要一条真短链的 code —— 当前 data.code 是字面量 <code>，查询返回空数据"
     headers:
       token: "${token}"
     data:

@@ -68,7 +68,7 @@ test_cases:
       - contains: { code: 0 }
 ```
 
-一条用例能写的字段：`data`（请求参数）、`validation`（响应断言）、`extract`（提取进变量池，供后续 `${}` 引用）、`db`（查库断言）、`path_params`、`headers`（用例级，覆盖接口级）、`xfail`（已知缺陷标记）、`smoke`（冒烟标记）。
+一条用例能写的字段：`data`（请求参数）、`validation`（响应断言）、`extract`（提取进变量池，供后续 `${}` 引用）、`db`（查库断言）、`path_params`、`headers`（用例级，覆盖接口级）、`xfail`（已知缺陷标记）、`smoke`（冒烟标记）、`skip`（前置条件不具备，暂时跳过）。
 
 **场景** —— 根节点是 list，**顺序即执行顺序**；把几个接口块顺序排开，用 `extract` + `${}` 在步骤间传值。
 

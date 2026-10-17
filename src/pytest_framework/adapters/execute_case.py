@@ -41,6 +41,8 @@ class ExecuteCase:
     xfail: str = ""
     # 冒烟标记（True = 消费方该挂 smoke）。见 TestCase.smoke
     smoke: bool = False
+    # 跳过原因（非空 = 消费方该挂 skip）。见 TestCase.skip
+    skip: str = ""
 
     @classmethod
     def from_model(cls, case_model: CaseModel) -> "list[ExecuteCase]":
@@ -60,6 +62,7 @@ class ExecuteCase:
                 path_params=c.path_params,
                 xfail=c.xfail,
                 smoke=c.smoke,
+                skip=c.skip,
             )
             for c in case_model.cases
         ]
