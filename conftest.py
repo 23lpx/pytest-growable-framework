@@ -22,6 +22,7 @@ from pytest_framework.adapters.db_checker import DbChecker
 from pytest_framework.adapters.execute_case import ExecuteCase
 from pytest_framework.entities.constants.logging import LogConfig
 from pytest_framework.entities.context.context import Context
+from pytest_framework.entities.exception.errors import ConfigError
 from pytest_framework.entities.model.case_model import CaseModel
 from pytest_framework.infrastructure.db import MySqlExecutor
 from pytest_framework.infrastructure.http import HttpClient
@@ -199,7 +200,15 @@ def _allure_environment(request: pytest.FixtureRequest) -> None:
     if not allure_dir:
         return
 
-    config: Config = request.getfixturevalue('config')
+    try:
+        config: Config = request.getfixturevalue('config')
+    except ConfigError:
+        # ⚠️ CI 上没有 config/config.yaml（敏感值不入库，靠 Secrets 注入的是
+        #    `cases/` 要的账号，`tests/` 根本不需要配置）。拿不到配置是**正常情况**：
+        #    报告少写「环境」页而已，不能因此把框架单测全判成 ERROR。
+        #    有意的降级 —— 环境信息是报告的附属品，不是测试的前提。
+        logger.warning('拿不到配置，allure 环境页只写 Python 版本')
+        config = None
 
     path = Path(allure_dir)
     if not path.is_absolute():
@@ -207,10 +216,12 @@ def _allure_environment(request: pytest.FixtureRequest) -> None:
         path = _project_root() / path
     path.mkdir(parents=True, exist_ok=True)
 
-    lines = [
-        f'shortlink.base_url={config.get("shortlink.base_url")}',
-        f'http.timeout={config.get("http.timeout")}',
-        f'shortlink.phone={config.get("shortlink.phone")}',
-        f'python={platform.python_version()}',
-    ]
+    lines = [f'python={platform.python_version()}']
+    if config is not None:
+        lines = [
+            f'shortlink.base_url={config.get("shortlink.base_url")}',
+            f'http.timeout={config.get("http.timeout")}',
+            f'shortlink.phone={config.get("shortlink.phone")}',
+            *lines,
+        ]
     (path / ENVIRONMENT_FILE).write_text('\n'.join(lines), encoding='utf-8')
