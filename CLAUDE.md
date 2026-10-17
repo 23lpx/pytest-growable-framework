@@ -331,6 +331,20 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 >
 > **⑲ 顺带摸出来的**：`config/config.yaml` 进了 `.gitignore` 之后，`git checkout` / `git merge` **会把它当可覆盖对象直接清掉**（换分支时真丢过一次，值只在本地就没了）。真值别只存这一个文件，放密码管理器 / 环境变量更稳。
 
+**⑳ `--alluredir` 会把配置加载拖进框架单测，而 CI 上没有配置文件** ——
+`_allure_environment` 是 autouse fixture：**只要带了 `--alluredir`**，它就调
+`getfixturevalue('config')` → `Config.load()` → 读 `config/config.yaml`。
+10-13 把该文件移出仓库后，CI 上压根没这个文件 → `ConfigError` → **116 条框架单测全 ERROR**。
+
+更坑的是**日志会骗人**：第 5 步「跑框架单测」因为 `continue-on-error` 显示**绿色**，
+只有最后那步「测试失败则让 job 变红」是红的 —— 看日志第一眼会以为问题在最后一步。
+
+> **本地一直绿**：`pytest tests/` 不带 `--alluredir`，那个 fixture 第一行就 `return` 了。
+> 所以这个坑只在 CI 上现形，**藏了 5 天**，还被误判成"服务器没开"（GHA 跑的是 `tests/`，根本不碰服务器）。
+>
+> **教训**：**autouse fixture 里依赖「可选的东西」，等于给所有测试埋雷** —— 它一挂就是全局
+> ERROR，而且只在特定参数组合下触发。修法不是"给 CI 塞一份配置"，而是让**报告的附属功能自己降级**。
+
 ## 待办与复盘
 
 **这一轮（18）做完的**：数据清理（`cleanup_test_data` 快照差集 + `scripts/clean_testdata.py` 兜底）；单接口独立（公共前置 `${g1_id}` 改**只读**，会删改它的 6 条移进场景）；场景化（2 条分组场景 + 1 个短链逃生舱）；摘掉 22 条过时 xfail、删 4 条重复的重名语义。
@@ -361,6 +375,9 @@ Runner 捕获 `FrameworkError` → 补 `case_name` 上下文 + 记日志 → 原
 > 原在 README 里，2026-10-13 随「README 只留对外内容」一起挪过来 —— 这些是**运维细节**，不是给读者看的。
 
 **GitHub Actions**（`.github/workflows/ci.yml`）：push / PR / 手动触发 → 跑 `tests/` → 出 junit + allure 产物 → 发通知。用 `continue-on-error` + 最后一步判 `outcome`，**测试失败也照发通知**。只跑 `tests/`（`cases/` 要内网，runner 够不着）。
+
+⚠️ **GHA 跑的是 `tests/`，零外部依赖 —— 它红了永远不是「服务器没开」**，先查配置 / 代码。服务器只影响 Jenkins 上的 `cases/`。
+（2026-10-17 踩过：CI 红了 5 天被误判成"服务器没开"，实际是 `--alluredir` 触发读 `config.yaml` 而 CI 上没这个文件 —— 见坑 ⑳。）
 
 要在 GitHub 上配的 Secrets（Settings → Secrets and variables → **Actions**，**不是 Environments**）—— 这些值只住在 GitHub，**绝不进仓库**：
 

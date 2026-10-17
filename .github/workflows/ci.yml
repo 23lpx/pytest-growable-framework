@@ -58,7 +58,7 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
-        run: python scripts/notify.py reports/junit.xml
+        run: python scripts/notify.py reports/junit.xml --title "框架单测 tests/（不依赖服务）"
 
       # 通知发完了才把测试的真实结果还给 CI —— 顺序不能反：
       # 测试一挂 job 就中止的话，最需要通知的时候反而收不到通知。
