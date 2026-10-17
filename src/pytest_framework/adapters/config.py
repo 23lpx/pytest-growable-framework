@@ -53,10 +53,19 @@ class Config:
 
     @staticmethod
     def _read(file_path: str) -> dict:
+        if not YamlRead.exists(file_path):
+            # 文件不存在 ≠ 配置错误：CI / 容器里本来就**不带** config.yaml（敏感值不入库），
+            # 全靠 APP_* 环境变量注入。回落到 example 模板 —— **结构和类型**靠它：
+            # timeout 必须是 int，而环境变量天生是字符串，没有原值就没法转出正确类型。
+            # 真正的值由环境变量叠上去覆盖（占位值不会被用到，缺了会在 get 那步报错）。
+            example = file_path.replace('.yaml', '.example.yaml')
+            if YamlRead.exists(example):
+                return YamlRead.read(example)
+            return {}
         try:
             raw = YamlRead.read(file_path)
         except YamlReadError as e:
-            # 「配置加载不了」和「取某个 key 取不到」根因不同 —— 异常类型也分开
+            # 文件在、但格式坏 / 编码错 —— 这是硬错误，不能静默吞掉
             raise ConfigError(f"配置加载失败: {file_path}") from e
         if not isinstance(raw, dict):
             raise ConfigError(f"配置根节点必须是字典: {file_path}")

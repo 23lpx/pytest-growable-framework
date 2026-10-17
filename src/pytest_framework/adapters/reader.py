@@ -7,6 +7,14 @@ from pytest_framework.infrastructure.path import _project_root
 class YamlRead:
 
     @staticmethod
+    def exists(file_path: str) -> bool:
+        """文件在不在（同样按「相对项目根」解析）。
+
+        给「配置文件可选」这类场景用 —— **不存在不一定是错误**。
+        """
+        return (_project_root() / file_path.lstrip("/\\")).exists()
+
+    @staticmethod
     def read(file_path: str) -> dict:
         # 统一按「相对项目根」处理：写成 /data/x.yaml 或 data/x.yaml 都行。
         # 不剥前导斜杠的话，pathlib 会把它当成绝对路径，把项目根整个顶掉

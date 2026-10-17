@@ -45,9 +45,23 @@ class TestConfig:
         assert cfg.exists("login.password")
         assert not cfg.exists("nope")
 
-    def test_load_missing_file_raises_config_error(self) -> None:
-        with pytest.raises(ConfigError):
-            Config.load("config/does_not_exist.yaml")
+    def test_load_missing_file_does_not_raise(self) -> None:
+        """文件不存在**不是**配置错误 —— CI / 容器里本来就不带 config.yaml，
+        全靠 APP_* 环境变量注入。缺的 key 在 get 时才报，不会伪装成「配置文件坏了」。"""
+        cfg = Config.load("config/does_not_exist.yaml")
+        with pytest.raises(ContextError):
+            cfg.get("shortlink.base_url")
+
+    def test_load_missing_file_falls_back_to_example(self, tmp_path) -> None:
+        """没有本地配置时回落到 example 模板 —— 结构 / 类型靠它。
+
+        （`timeout` 必须是 int，而环境变量天生是字符串，没有原值就没法转出正确类型。）
+        """
+        (tmp_path / "cfg.example.yaml").write_text(
+            "http:\n  timeout: 7\n", encoding="utf-8"
+        )
+        cfg = Config.load(str(tmp_path / "cfg.yaml"))
+        assert cfg.get("http.timeout") == 7
 
 
 class TestEnvOverlay:
