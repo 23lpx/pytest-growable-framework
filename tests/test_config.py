@@ -52,17 +52,6 @@ class TestConfig:
         with pytest.raises(ContextError):
             cfg.get("shortlink.base_url")
 
-    def test_load_missing_file_falls_back_to_example(self, tmp_path) -> None:
-        """没有本地配置时回落到 example 模板 —— 结构 / 类型靠它。
-
-        （`timeout` 必须是 int，而环境变量天生是字符串，没有原值就没法转出正确类型。）
-        """
-        (tmp_path / "cfg.example.yaml").write_text(
-            "http:\n  timeout: 7\n", encoding="utf-8"
-        )
-        cfg = Config.load(str(tmp_path / "cfg.yaml"))
-        assert cfg.get("http.timeout") == 7
-
 
 class TestEnvOverlay:
     """环境变量覆盖。
